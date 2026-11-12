@@ -4,7 +4,7 @@ import { spawn, spawnSync, exec } from 'node:child_process'
 
 const ROOT_DIR = import.meta.dirname
 const FRONTEND_DIR = path.join(ROOT_DIR, 'frontend')
-const SERVER_ENTRY = path.join(ROOT_DIR, 'server', 'api-enhanced-4.41.1', 'main.js')
+const SERVER_ENTRY = path.join(ROOT_DIR, 'server', 'app.ts')
 const LOGS_DIR = path.join(ROOT_DIR, 'logs')
 const envPath = path.join(ROOT_DIR, '.env')
 
@@ -51,8 +51,9 @@ if (!isProd) {
 		}
 	})
 	// 启动后端
-	const server = spawn(process.execPath, ['--watch', SERVER_ENTRY], {
+	const server = spawn('npx', ['tsx', 'watch', SERVER_ENTRY], {
 		stdio: 'inherit',
+		shell: true,
 		cwd: ROOT_DIR,
 		env: {
 			...process.env,
@@ -98,7 +99,9 @@ if (!isProd) {
 		fs.mkdirSync(LOGS_DIR, { recursive: true })
 		pm2.start(
 			{
-				script: SERVER_ENTRY,
+				script: 'npx',
+				args: ['tsx', SERVER_ENTRY],
+				interpreter: 'none',
 				cwd: ROOT_DIR,
 				name: 'hearth-radio',
 				env: {

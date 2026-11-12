@@ -20,12 +20,13 @@
 		"server"
 	],
 	"dependencies": {
-		"@neteasecloudmusicapienhanced/api": "file:server/api-enhanced-4.41.1",
+		"@neteasecloudmusicapienhanced/api": "file:server/ncm-api",
 		"@neteasecloudmusicapienhanced/unblockmusic-utils": "^0.4.5",
 		"axios": "^1.20.0",
 		"crypto-js": "^4.2.0",
 		"express": "^5.2.1",
 		"express-fileupload": "^1.5.2",
+		"fastify": "^5.12.8",
 		"fzstd": "^0.1.0",
 		"jsdom": "^24.1.3",
 		"music-metadata": "^11.16.1",
@@ -46,6 +47,7 @@
 		"@types/node": "^24.1.0",
 		"@types/react": "^19.1.9",
 		"@types/react-dom": "^19.1.7",
-		"prettier": "^3.6.2"
+		"prettier": "^3.6.2",
+		"tsx": "^4.23.15"
 	}
 }
