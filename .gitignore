@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+pnpm-debug.log*
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+.claude/
+
+# api-enhanced
+.DS_Store
+.idea
+.vscode
+.history
+bin
+anonymous_token
+.vercel
+IFLOW.md
+precompiled
