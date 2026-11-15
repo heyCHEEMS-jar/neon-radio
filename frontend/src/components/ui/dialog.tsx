@@ -7,12 +7,20 @@ import { cn } from '@/lib/utils'
 
 const Dialog = DialogPrimitive.Root
 
-function DialogContent({ className, children, showCloseButton = true, ...props }: ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+function DialogContent({
+	className,
+	children,
+	showCloseButton = true,
+	...props
+}: ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
 	return (
 		<DialogPrimitive.Portal>
 			<DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70" />
 			<DialogPrimitive.Content
-				className={cn('fixed left-1/2 top-1/2 z-50 grid max-h-[90svh] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 text-zinc-950 shadow-xl', className)}
+				className={cn(
+					'fixed left-1/2 top-1/2 z-50 grid max-h-[90svh] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 text-zinc-950 shadow-xl',
+					className
+				)}
 				{...props}
 			>
 				{children}

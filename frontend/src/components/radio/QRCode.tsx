@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { debounce } from '@/utils/util'
 
 interface LoginQr {
@@ -25,7 +26,7 @@ async function loginRequest(path: string, signal: AbortSignal): Promise<Record<s
 	return result
 }
 
-export default function LoginForm() {
+export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 	const [qr, setQr] = useState<LoginQr | null>(null)
 	const [attempt, setAttempt] = useState(0)
 	const [busy, setBusy] = useState(true)
@@ -52,8 +53,10 @@ export default function LoginForm() {
 
 		const showError = (error: unknown) => {
 			if (controller.signal.aborted) return
-			setMessage(error instanceof Error ? error.message : '登录请求失败')
+			const errorMessage = error instanceof Error ? error.message : '登录请求失败'
+			setMessage(errorMessage)
 			setQr(null)
+			toast.error(errorMessage)
 		}
 
 		const poll = async (key: string) => {
@@ -61,7 +64,12 @@ export default function LoginForm() {
 				const result = await loginRequest(`login-qr/${encodeURIComponent(key)}`, controller.signal)
 				if (controller.signal.aborted) return
 				setMessage(typeof result.message === 'string' ? result.message : '请用网易云音乐 App 扫码，并在手机上确认。')
-				if (result.code === 800 || result.code === 803) setQr(null)
+				if (result.code === 803) {
+					setQr(null)
+					onSuccess()
+					return
+				}
+				if (result.code === 800) setQr(null)
 				else timer = setTimeout(() => void poll(key), pollInterval)
 			} catch (error: unknown) {
 				showError(error)
@@ -98,7 +106,7 @@ export default function LoginForm() {
 			generateQr.cancel()
 			controller.abort()
 		}
-	}, [attempt, generateQr])
+	}, [attempt, generateQr, onSuccess])
 
 	return (
 		<div className="space-y-4">

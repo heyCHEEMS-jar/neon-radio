@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { visualizerConfig as config } from '@/config/visualizer'
 import { createMockSpectrum } from '@/lib/visualizer/mock'
 
@@ -13,12 +13,20 @@ interface View {
 	createAnimation: (dpr: number) => Drawing
 }
 
-export function useVisualizer() {
+export function useVisualizer(active = true) {
 	const ringRef = useRef<HTMLCanvasElement>(null)
 	const coverRef = useRef<HTMLDivElement>(null)
 	const imageRef = useRef<HTMLImageElement>(null)
 	const topRef = useRef<HTMLCanvasElement>(null)
 	const bottomRef = useRef<HTMLCanvasElement>(null)
+	const activeRef = useRef(active)
+	const syncPlaybackRef = useRef<(() => void) | null>(null)
+
+	// 只切换播放状态，保留绘图实例和累计时间
+	useLayoutEffect(() => {
+		activeRef.current = active
+		syncPlaybackRef.current?.()
+	}, [active])
 
 	useEffect(() => {
 		const ring = ringRef.current
@@ -48,12 +56,11 @@ export function useVisualizer() {
 		const cameraMotion = Array.from({ length: 3 }, () => {
 			const phases = Array.from({ length: 2 }, () => Math.random() * Math.PI * 2)
 			const frequencies = [1.1 + Math.random() * 0.2, 0.25 + Math.random() * 0.15]
-			return (time: number) =>
-				Math.sin(time * frequencies[0] + phases[0]) * 0.9 +
-				Math.sin(time * frequencies[1] + phases[1]) * 0.1
+			return (time: number) => Math.sin(time * frequencies[0] + phases[0]) * 0.9 + Math.sin(time * frequencies[1] + phases[1]) * 0.1
 		})
 
 		const moveCamera = () => {
+			if (!activeRef.current) return
 			if (reducedMotion.matches) {
 				cameraStartedAt = elapsed
 				image.style.transform = `scale(${config.camera.scale})`
@@ -69,6 +76,7 @@ export function useVisualizer() {
 		}
 
 		const paint = () => {
+			if (!activeRef.current || document.hidden) return
 			spectrum.update(reducedMotion.matches ? 0 : elapsed)
 			for (const view of views) {
 				view.context.clearRect(0, 0, view.canvas.width, view.canvas.height)
@@ -78,7 +86,7 @@ export function useVisualizer() {
 
 		const tick = (now: number) => {
 			frameId = 0
-			if (disposed || document.hidden || reducedMotion.matches) return
+			if (disposed || !activeRef.current || document.hidden || reducedMotion.matches) return
 
 			const dt = previousTime === null ? 0 : Math.min((now - previousTime) / 1000, 0.1)
 			previousTime = now
@@ -93,31 +101,26 @@ export function useVisualizer() {
 		}
 
 		const start = () => {
-			if (disposed || document.hidden || reducedMotion.matches || frameId || !views.length) return
+			if (disposed || !activeRef.current || document.hidden || reducedMotion.matches || frameId || !views.length) return
 			previousTime = null
 			backlog = frameInterval
 			frameId = window.requestAnimationFrame(tick)
 		}
 
 		const resize = () => {
-			if (disposed) return
+			if (disposed || !activeRef.current || document.hidden) return
 			const dpr = Math.min(window.devicePixelRatio || 1, config.maxDpr)
 			const coverSize = cover.getBoundingClientRect().width
 			const nextCoverWidth = coverSize * dpr
 			// 放大后的图片保留足够余量，让位移和旋转都不会露出圆形裁切边界。
-			maxCameraOffset = Math.max(0, Math.min(config.camera.maxOffset, coverSize * (config.camera.scale - 1) / (2 * Math.SQRT2) * 0.85))
+			maxCameraOffset = Math.max(0, Math.min(config.camera.maxOffset, ((coverSize * (config.camera.scale - 1)) / (2 * Math.SQRT2)) * 0.85))
 			const coverResized = nextCoverWidth !== coverWidth
 			coverWidth = nextCoverWidth
 			for (const view of views) {
 				const bounds = view.canvas.getBoundingClientRect()
 				const width = Math.max(1, Math.round(bounds.width * dpr))
 				const height = Math.max(1, Math.round(bounds.height * dpr))
-				if (
-					view.canvas.width !== width ||
-					view.canvas.height !== height ||
-					!view.animation ||
-					(view.canvas === ring && coverResized)
-				) {
+				if (view.canvas.width !== width || view.canvas.height !== height || !view.animation || (view.canvas === ring && coverResized)) {
 					view.canvas.width = width
 					view.canvas.height = height
 					view.animation = view.createAnimation(dpr)
@@ -128,18 +131,14 @@ export function useVisualizer() {
 		}
 
 		const syncPlayback = () => {
-			if (document.hidden || reducedMotion.matches) {
-				window.cancelAnimationFrame(frameId)
-				frameId = 0
-				previousTime = null
-				if (!document.hidden) {
-					moveCamera()
-					paint()
-				}
-			} else {
-				start()
-			}
+			window.cancelAnimationFrame(frameId)
+			frameId = 0
+			previousTime = null
+			if (disposed || !activeRef.current || document.hidden) return
+			resize()
+			start()
 		}
+		syncPlaybackRef.current = syncPlayback
 
 		void (async () => {
 			try {
@@ -176,13 +175,20 @@ export function useVisualizer() {
 						context: ringContext,
 						animation: null,
 						createAnimation: dpr => {
+							// 以480px画布为基准缩放线宽和光晕，最细保留1px
+							const scale = Math.min(1, ring.width / dpr / 480)
+							const lineWidth = Math.max(1, config.ring.lineWidth * scale) * dpr
+							const glowStrength = config.ring.glow.strength * scale * dpr
 							const radius = coverWidth / 2 + config.ring.gap * dpr
-							const maxHeight = Math.max(0, Math.min(
-								config.ring.maxHeight * dpr,
-								2 * (Math.min(ring.width, ring.height) / 2 - radius - (config.ring.lineWidth + config.ring.glow.strength) * dpr)
-							))
-							const count = Math.max(8, Math.min(config.ring.count, Math.floor(2 * Math.PI * radius / (config.ring.spacing * dpr))))
-							const step = Math.PI * 2 / count
+							const maxHeight = Math.max(
+								0,
+								Math.min(
+									config.ring.maxHeight * dpr,
+									2 * (Math.min(ring.width, ring.height) / 2 - radius - (lineWidth + glowStrength))
+								)
+							)
+							const count = Math.max(8, Math.min(config.ring.count, Math.floor((2 * Math.PI * radius) / (config.ring.spacing * dpr))))
+							const step = (Math.PI * 2) / count
 							const directions = Array.from({ length: count }, (_, index) => {
 								const angle = index * step - Math.PI / 2
 								return {
@@ -191,7 +197,7 @@ export function useVisualizer() {
 									sin: Math.sin(angle),
 									midCos: Math.cos(angle + step / 2),
 									midSin: Math.sin(angle + step / 2),
-									sample: Math.floor(config.bufferSize * (0.125 + 0.375 * index / count))
+									sample: Math.floor(config.bufferSize * (0.125 + (0.375 * index) / count))
 								}
 							})
 
@@ -200,9 +206,9 @@ export function useVisualizer() {
 									context.save()
 									context.translate(ring.width / 2, ring.height / 2)
 									context.strokeStyle = config.ring.color
-									context.lineWidth = config.ring.lineWidth * dpr
+									context.lineWidth = lineWidth
 									context.lineJoin = 'miter'
-									context.shadowBlur = config.ring.glow.strength * dpr
+									context.shadowBlur = glowStrength
 									context.shadowColor = config.ring.glow.color
 									context.beginPath()
 									for (let index = 0; index < count; index += 1) {
@@ -210,7 +216,7 @@ export function useVisualizer() {
 										const next = directions[(index + 1) % count]
 										const strength = Math.max(0, data[sample] - config.ring.openThreshold) / (255 - config.ring.openThreshold)
 										const impact = Math.min(1, strength * config.ring.sensitivity) ** 2
-										const halfHeight = maxHeight * impact / 2
+										const halfHeight = (maxHeight * impact) / 2
 										context.moveTo(radius * cos, radius * sin)
 										if (halfHeight === 0) {
 											context.arc(0, 0, radius, angle, angle + step)
@@ -237,8 +243,7 @@ export function useVisualizer() {
 				window.addEventListener('resize', resize)
 				document.addEventListener('visibilitychange', syncPlayback)
 				reducedMotion.addEventListener('change', syncPlayback)
-				resize()
-				start()
+				syncPlayback()
 			} catch (error) {
 				if (!disposed) console.error('Wave.js visualizer:', error)
 			}
@@ -246,6 +251,7 @@ export function useVisualizer() {
 
 		return () => {
 			disposed = true
+			syncPlaybackRef.current = null
 			window.cancelAnimationFrame(frameId)
 			resizeObserver?.disconnect()
 			window.removeEventListener('resize', resize)

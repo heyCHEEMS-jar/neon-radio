@@ -5,6 +5,7 @@ import { mergeCookies } from '../utils/cookie.js'
 import { decodeNeteaseSessionKey, decryptNeteaseSessionCookie, encryptNeteaseSessionCookie } from '../utils/netease-session-crypto.js'
 import { ApiError, isRecord, ncmApi, ncmOptions } from '../utils/ncm.js'
 import { findNeteaseSession, initNeteaseSessionRepository, upsertNeteaseSession } from './netease-session-repository.js'
+import { createBrowserSession, initBrowserSessions, revokeBrowserSessions } from './browser-session.js'
 
 const cookieFile = path.resolve('.data/netease-session.json')
 const cookieTempFile = `${cookieFile}.tmp`
@@ -16,6 +17,8 @@ let cookie = ''
 let updatedAt: string | null = null
 let encryptionKey: Buffer | null = null
 let pendingUpdate = Promise.resolve()
+let verifiedUntil = 0
+let verification: Promise<boolean> | null = null
 
 interface LegacySession {
 	cookie: string
@@ -23,7 +26,10 @@ interface LegacySession {
 }
 
 function formatUpdatedAt(value: Date) {
-	return value.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')
+	return value
+		.toISOString()
+		.replace('T', ' ')
+		.replace(/\.\d{3}Z$/, '')
 }
 
 function hasValidCookieStructure(value: string, allowEmpty = false) {
@@ -44,9 +50,13 @@ function normalizeLegacyUpdatedAt(value: unknown) {
 	return formatUpdatedAt(parsed)
 }
 
-function updateSession(update: () => Promise<void>) {
+// 串行更新网易云凭证，避免登录、刷新和失效清理互相覆盖
+function updateSession<T>(update: () => Promise<T>) {
 	const next = pendingUpdate.then(update)
-	pendingUpdate = next.catch(() => {})
+	pendingUpdate = next.then(
+		() => {},
+		() => {}
+	)
 	return next
 }
 
@@ -87,15 +97,20 @@ async function readLegacySession(): Promise<LegacySession | null> {
 	return { cookie: saved.cookie, updatedAt: normalizeLegacyUpdatedAt(saved.updatedAt) }
 }
 
+// 加密持久化网易云 Cookie，清空时一并撤销本站会话
 async function persistCookie(value: string) {
 	if (!encryptionKey) throw new Error('网易云登录态尚未初始化')
 	const savedAt = formatUpdatedAt(new Date())
 	const envelope = encryptNeteaseSessionCookie(value, config.NETEASE_UID, encryptionKey)
+	// 先撤销浏览器会话，避免网易云重新登录后旧 token 自动恢复有效
+	if (!value) await revokeBrowserSessions()
 	await upsertNeteaseSession(config.NETEASE_UID, envelope, savedAt)
 	cookie = value
 	updatedAt = savedAt
+	verifiedUntil = 0
 }
 
+// 核实网易云 Cookie，并校验账号是否为配置的固定 UID
 async function validateCookie(value: string) {
 	if (!hasValidCookieStructure(value)) throw new ApiError(401, '网易云登录 Cookie 无效')
 	const response = await ncmApi.login_status({ ...ncmOptions, cookie: value })
@@ -109,10 +124,12 @@ async function validateCookie(value: string) {
 	return merged
 }
 
+// 初始化存储并恢复服务端保存的网易云登录
 export async function initSession() {
 	validateConfig()
 	const key = decodeNeteaseSessionKey(config.NETEASE_COOKIE_ENCRYPTION_KEY)
 	await initNeteaseSessionRepository()
+	await initBrowserSessions()
 	const stored = await findNeteaseSession(config.NETEASE_UID)
 
 	let restoredCookie = ''
@@ -139,21 +156,75 @@ export async function initSession() {
 	encryptionKey = key
 	cookie = restoredCookie
 	updatedAt = restoredUpdatedAt
+	verifiedUntil = 0
+	if (!cookie) await revokeBrowserSessions()
 }
 
+// 返回电台账号的登录概况，不代表当前浏览器已经登录
 export function getSessionStatus() {
-	return { uid: config.NETEASE_UID, loggedIn: Boolean(cookie), needsLogin: !cookie, updatedAt }
+	return { uid: config.NETEASE_UID, loggedIn: Boolean(cookie), updatedAt }
 }
 
+// 读取服务端网易云凭证，未登录时拒绝请求
 export function getSessionCookie() {
 	if (!cookie) throw new ApiError(401, '请打开登录弹窗扫码登录电台账号')
 	return cookie
 }
 
-export function saveSessionCookie(value: string) {
-	return updateSession(async () => persistCookie(await validateCookie(value.trim())))
+// 先校验并保存网易云 Cookie，再签发当前浏览器的本站会话
+export function saveSessionCookie(value: string, previousToken = '') {
+	return updateSession(async () => {
+		await persistCookie(await validateCookie(value.trim()))
+		return createBrowserSession(previousToken)
+	})
 }
 
+function isExpiredCookie(error: unknown) {
+	const body = isRecord(error) && isRecord(error.body) ? error.body : undefined
+	const data = isRecord(body?.data) ? body.data : undefined
+	const codes = [body?.code, data?.code, error instanceof ApiError ? error.statusCode : undefined]
+	return codes.some(code => code === 301 || code === 401 || code === 403)
+}
+
+// 短缓存并合并登录校验，确认失效时撤销本站会话
+export function verifySession() {
+	if (verification) return verification
+	if (verifiedUntil > Date.now()) return Promise.resolve(true)
+
+	verification = updateSession(async () => {
+		if (!cookie) return false
+		try {
+			await validateCookie(cookie)
+			verifiedUntil = Date.now() + 30_000
+			return true
+		} catch (error: unknown) {
+			if (!isExpiredCookie(error)) throw error
+			await persistCookie('')
+			return false
+		}
+	}).finally(() => { verification = null })
+	return verification
+}
+
+// 携带网易云 Cookie 请求数据，明确失效才撤销会话，旧请求不影响新登录
+export async function withSessionCookie<T extends { body: { code: number } }>(request: (value: string) => Promise<T>) {
+	const current = getSessionCookie()
+	try {
+		const response = await request(current)
+		if (response.body.code !== 200) throw response
+		return response
+	} catch (error: unknown) {
+		const body = isRecord(error) && isRecord(error.body) ? error.body : undefined
+		if (typeof body?.code === 'number' && [301, 401].includes(body.code)) {
+			await updateSession(async () => {
+				if (cookie === current) await persistCookie('')
+			})
+		}
+		throw error
+	}
+}
+
+// 定时刷新网易云 Cookie，确认失效时撤销全部本站会话
 export function refreshSession() {
 	return updateSession(async () => {
 		if (!cookie) return
@@ -162,15 +233,14 @@ export function refreshSession() {
 			if (response.body.code !== 200) throw response
 			await persistCookie(await validateCookie(mergeCookies(cookie, response.cookie || [])))
 		} catch (error: unknown) {
-			const body = isRecord(error) && isRecord(error.body) ? error.body : undefined
-			const expired = typeof body?.code === 'number' && [301, 401, 403].includes(body.code)
-			if (expired || (error instanceof ApiError && [401, 403].includes(error.statusCode))) await persistCookie('')
+			if (isExpiredCookie(error)) await persistCookie('')
 			// 网络或存储故障不清空原 Cookie；失效清空仅在数据库提交成功后发布到内存。
 			throw error
 		}
 	})
 }
 
+// 服务关闭前等待在途登录和刷新操作结束
 export function waitForSessionUpdates() {
 	return pendingUpdate
 }

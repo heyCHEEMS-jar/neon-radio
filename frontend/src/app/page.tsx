@@ -1,14 +1,14 @@
 import Video from '@/components/backgrounds/Video'
 import Visuals from '@/components/visualizer/Visuals'
-import RadioMenu from '@/components/radio/ContextMenu'
+import Radio from '@/components/radio/Radio'
 
 export default function HomePage() {
 	return (
-		<RadioMenu>
+		<Radio>
 			<main>
 				<Video />
 				<Visuals />
 			</main>
-		</RadioMenu>
+		</Radio>
 	)
 }

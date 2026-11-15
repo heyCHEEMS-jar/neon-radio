@@ -3,6 +3,7 @@ const config = {
 	API_PORT: Number(process.env.API_PORT || '4003'),
 	NETEASE_UID: process.env.NETEASE_UID?.trim() || '',
 	COOKIE_REFRESH_HOURS: Number(process.env.COOKIE_REFRESH_HOURS || '6'),
+	USER_SESSION_DAYS: Number(process.env.USER_SESSION_DAYS || '30'),
 	DB_HOST: process.env.DB_HOST?.trim() || '',
 	DB_PORT: Number(process.env.DB_PORT),
 	DB_USER: process.env.DB_USER?.trim() || '',
@@ -20,6 +21,9 @@ export function validateConfig() {
 	if (!/^[1-9][0-9]{0,19}$/.test(config.NETEASE_UID)) throw new Error('请在 .env 配置有效的 NETEASE_UID')
 	if (!Number.isFinite(config.COOKIE_REFRESH_HOURS) || config.COOKIE_REFRESH_HOURS < 1 || config.COOKIE_REFRESH_HOURS > 24) {
 		throw new Error('COOKIE_REFRESH_HOURS 必须在 1 到 24 之间')
+	}
+	if (!Number.isInteger(config.USER_SESSION_DAYS) || config.USER_SESSION_DAYS < 1) {
+		throw new Error('USER_SESSION_DAYS 必须是正整数，单位为天')
 	}
 
 	validatePort('DB_PORT', config.DB_PORT)

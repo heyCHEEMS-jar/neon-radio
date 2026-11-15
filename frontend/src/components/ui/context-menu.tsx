@@ -19,7 +19,15 @@ function ContextMenuContent({ className, ...props }: ComponentProps<typeof Conte
 }
 
 function ContextMenuItem({ className, ...props }: ComponentProps<typeof ContextMenuPrimitive.Item>) {
-	return <ContextMenuPrimitive.Item className={cn('relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-zinc-100 data-disabled:pointer-events-none data-disabled:opacity-50', className)} {...props} />
+	return (
+		<ContextMenuPrimitive.Item
+			className={cn(
+				'relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-zinc-100 data-disabled:pointer-events-none data-disabled:opacity-50',
+				className
+			)}
+			{...props}
+		/>
+	)
 }
 
 export { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem }

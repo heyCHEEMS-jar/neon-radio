@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import config from '../config.js'
 import { ApiError, ncmApi, ncmOptions } from '../utils/ncm.js'
-import { getSessionCookie } from '../services/netease-session.js'
+import { withSessionCookie } from '../services/netease-session.js'
 
 interface Pagination {
 	limit: number
@@ -20,8 +20,7 @@ const paginationSchema = {
 export default async function playlistRoutes(fastify: FastifyInstance) {
 	fastify.get<{ Querystring: Pagination }>('/lists', { schema: { querystring: paginationSchema } }, async request => {
 		const { limit, offset } = request.query
-		const response = await ncmApi.user_playlist({ ...ncmOptions, uid: config.NETEASE_UID, limit, offset, cookie: getSessionCookie() })
-		if (response.body.code !== 200) throw response
+		const response = await withSessionCookie(cookie => ncmApi.user_playlist({ ...ncmOptions, uid: config.NETEASE_UID, limit, offset, cookie }))
 		if (!Array.isArray(response.body.playlist)) throw new ApiError(502, '网易云返回的歌单列表异常')
 		const body: Record<string, unknown> = { ...response.body }
 		delete body.cookie
@@ -38,8 +37,7 @@ export default async function playlistRoutes(fastify: FastifyInstance) {
 		},
 		async request => {
 			const { limit, offset } = request.query
-			const response = await ncmApi.playlist_track_all({ ...ncmOptions, id: request.params.id, limit, offset, cookie: getSessionCookie() })
-			if (response.body.code !== 200) throw response
+			const response = await withSessionCookie(cookie => ncmApi.playlist_track_all({ ...ncmOptions, id: request.params.id, limit, offset, cookie }))
 			if (!Array.isArray(response.body.songs)) throw new ApiError(502, '网易云返回的歌曲列表异常')
 			const body: Record<string, unknown> = { ...response.body }
 			delete body.cookie

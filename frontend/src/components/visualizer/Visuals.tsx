@@ -1,5 +1,7 @@
 'use client'
 
+import { useContext } from 'react'
+import { RadioSceneContext } from '@/components/radio/Radio'
 import { visualizerConfig as config } from '@/config/visualizer'
 import { useVisualizer } from '@/hooks/visualizer/useVisualizer'
 
@@ -7,13 +9,16 @@ const edgeClassName =
 	'absolute left-0 block h-[clamp(48px,10svh,96px)] w-full opacity-70 [mask-image:linear-gradient(to_right,transparent,#000_16%,#000_84%,transparent)]'
 
 const infoClassName =
-	'min-w-0 translate-y-1/2 border-t-[clamp(2px,0.3vw,5px)] border-white/70 pt-[clamp(6px,0.8vw,12px)] text-center text-[clamp(10px,2.4vw,40px)] font-light text-[#e6cbd6] [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]'
+	'min-w-0 translate-y-1/2 border-t-[clamp(1px,0.3vw,5px)] border-white/70 pt-[clamp(6px,0.8vw,12px)] text-center text-[clamp(10px,2.4vw,40px)] font-light text-[#e6cbd6] [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]'
 
+// 描边随中心容器宽度缩放，最细保留1px
 const frameClassName =
-	'absolute top-1/2 left-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 border-[5px]'
+	'absolute top-1/2 left-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
 
 export default function Visuals() {
-	const { ringRef, coverRef, imageRef, topRef, bottomRef } = useVisualizer()
+	const active = useContext(RadioSceneContext)
+	const animationPlayState = active ? 'running' : 'paused'
+	const { ringRef, coverRef, imageRef, topRef, bottomRef } = useVisualizer(active)
 
 	return (
 		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化（模拟频谱）">
@@ -26,13 +31,15 @@ export default function Visuals() {
 					</p>
 				</div>
 
-				<div className="relative aspect-square w-full">
+				<div className="relative aspect-square w-full @container">
 					<div
-						className={`${frameClassName} motion-safe:animate-[cover-frame-spin_24s_linear_infinite] border-white/70 shadow-[0_0_12px_rgba(255,255,255,0.25)]`}
+						className={`${frameClassName} motion-safe:animate-[cover-frame-spin_24s_linear_infinite] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
+						style={{ animationPlayState }}
 						aria-hidden="true"
 					/>
 					<div
-						className={`${frameClassName} rotate-45 motion-safe:animate-[cover-frame-spin_24s_linear_infinite_reverse] border-white/70 shadow-[0_0_12px_rgba(255,255,255,0.25)]`}
+						className={`${frameClassName} rotate-45 motion-safe:animate-[cover-frame-spin_24s_linear_infinite_reverse] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
+						style={{ animationPlayState }}
 						aria-hidden="true"
 					/>
 					<canvas ref={ringRef} className="absolute inset-0 z-10 block size-full" aria-hidden="true" />

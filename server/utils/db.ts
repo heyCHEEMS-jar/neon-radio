@@ -24,9 +24,7 @@ export const pool = mysql.createPool({
 export async function ensureDatabase() {
 	const connection = await mysql.createConnection(connectionOptions)
 	try {
-		await connection.query(
-			`CREATE DATABASE IF NOT EXISTS ${connection.escapeId(config.DB_NAME)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
-		)
+		await connection.query(`CREATE DATABASE IF NOT EXISTS ${connection.escapeId(config.DB_NAME)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
 	} finally {
 		await connection.end()
 	}
