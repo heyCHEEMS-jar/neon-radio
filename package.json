@@ -1,5 +1,5 @@
 {
-	"name": "hearth-radio",
+	"name": "neon-radio",
 	"version": "1.0.0",
 	"private": true,
 	"license": "ISC",
@@ -7,47 +7,23 @@
 	"engines": {
 		"node": ">=20.12.0"
 	},
+	"packageManager": "pnpm@12.6.0",
 	"type": "module",
 	"main": "start.js",
 	"scripts": {
 		"dev": "node start.js --dev",
 		"start": "node start.js --prod",
-		"stop": "pm2 stop hearth-radio",
-		"log": "pm2 log hearth-radio"
+		"stop": "pm2 stop neon-radio-api neon-radio-web",
+		"log": "pm2 logs"
 	},
 	"workspaces": [
 		"frontend",
 		"server"
 	],
 	"dependencies": {
-		"@neteasecloudmusicapienhanced/api": "file:server/ncm-api",
-		"@neteasecloudmusicapienhanced/unblockmusic-utils": "^0.4.5",
-		"axios": "^1.20.0",
-		"crypto-js": "^4.2.0",
-		"express": "^5.2.1",
-		"express-fileupload": "^1.5.2",
-		"fastify": "^5.12.8",
-		"fzstd": "^0.1.0",
-		"jsdom": "^24.1.3",
-		"music-metadata": "^11.16.1",
-		"node-forge": "^1.4.0",
-		"pac-proxy-agent": "^7.2.0",
-		"pm2": "^7.1.2",
-		"qrcode": "^1.5.4",
-		"react": "^19.1.1",
-		"react-dom": "^19.1.1",
-		"react-router-dom": "^7.7.1",
-		"react-scripts": "5.0.1",
-		"safe-decode-uri-component": "^1.2.1",
-		"tunnel": "^0.0.6",
-		"typescript": "^5.8.3",
-		"xml2js": "^0.6.2"
+		"pm2": "^7.1.2"
 	},
 	"devDependencies": {
-		"@types/node": "^24.1.0",
-		"@types/react": "^19.1.9",
-		"@types/react-dom": "^19.1.7",
-		"prettier": "^3.6.2",
 		"tsx": "^4.23.15"
 	}
 }

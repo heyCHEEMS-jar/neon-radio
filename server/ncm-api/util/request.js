@@ -541,14 +541,14 @@ const createRequest = async (uri, data, options) => {
 				if (answer.status === 200) {
 					resolve(answer)
 				} else {
-					console.log('[ERR]', answer)
+					console.log('[ERR]', { status: answer.status, code: answer.body?.code })
 					reject(answer)
 				}
 			})
 			.catch(err => {
 				answer.status = 502
 				answer.body = { code: 502, msg: err.message || err }
-				console.log('[ERR]', answer)
+				console.log('[ERR]', { status: answer.status, code: answer.body?.code })
 				reject(answer)
 			})
 	})

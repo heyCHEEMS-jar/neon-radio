@@ -2,6 +2,8 @@ packages:
   - frontend
   - server
 allowBuilds:
+  '@vgpu/adapter-node': true
   core-js: true
   core-js-pure: true
   esbuild: true
+  webgpu: true

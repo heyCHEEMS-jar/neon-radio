@@ -13,6 +13,9 @@ pnpm-lock.yaml
 package-lock.json
 yarn.lock
 
+# Radio login state (contains account credentials)
+.data/
+
 # Environment
 .env
 .env.local
