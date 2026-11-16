@@ -107,7 +107,7 @@ export default function useRadioOptions(open: boolean) {
 		update,
 		neteaseSync: live.neteaseSync,
 		syncPending: live.syncPending,
-		syncSucceeded: live.syncSucceeded,
+		successfulSyncId: live.successfulSyncId,
 		sync: live.syncNetease
 	}
 }

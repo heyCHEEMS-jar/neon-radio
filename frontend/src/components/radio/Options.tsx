@@ -1,10 +1,12 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import useRadioOptions from '@/hooks/useRadioOptions'
+import { debounce } from '@/utils/util'
 
 const optionMessages = {
 	loading: '正在读取电台配置…',
@@ -14,10 +16,17 @@ const optionMessages = {
 }
 
 export default function Options({ onClose }: { onClose: () => void }) {
-	const { options, status, load, update, neteaseSync, syncPending, syncSucceeded, sync } = useRadioOptions(true)
+	const { options, status, load, update, neteaseSync, syncPending, successfulSyncId, sync } = useRadioOptions(true)
+	// 每次打开记录已有成功任务，新成功只隐藏本次弹窗的入口
+	const [initialSuccessfulSyncId] = useState(successfulSyncId)
+	const syncSucceeded = successfulSyncId !== null && successfulSyncId !== initialSuccessfulSyncId
 	const syncing = syncPending || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing'
 	const busy = status === 'saving' || syncPending
 	const syncMessage = syncPending ? '正在发送同步请求…' : neteaseSync?.message
+
+	// 连续点击合并为一次同步，关闭弹窗时取消未发出的请求
+	const debouncedSync = useMemo(() => debounce(sync, 300), [sync])
+	useEffect(() => () => debouncedSync.cancel(), [debouncedSync])
 
 	return (
 		<Dialog
@@ -87,7 +96,7 @@ export default function Options({ onClose }: { onClose: () => void }) {
 					<div className="space-y-3 border-t border-zinc-200 pt-4">
 						<button
 							type="button"
-							onClick={sync}
+							onClick={debouncedSync}
 							disabled={status !== 'ready' || busy || syncing}
 							className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
 						>

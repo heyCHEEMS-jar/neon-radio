@@ -28,7 +28,7 @@ export interface RadioLiveState {
 	status: 'loading' | 'ready' | 'error'
 	neteaseSync: NeteaseSyncState | null
 	syncPending: boolean
-	syncSucceeded: boolean
+	successfulSyncId: string | null
 	syncNetease: () => void
 	reconnect: () => void
 	reauthenticate: () => void
@@ -73,7 +73,7 @@ export default function useRadioLive(roamingOpen: boolean): RadioLiveState {
 	const [connectionKey, setConnectionKey] = useState(0)
 	const [neteaseSync, setNeteaseSync] = useState<NeteaseSyncState | null>(null)
 	const [syncPending, setSyncPending] = useState(false)
-	const [syncSucceeded, setSyncSucceeded] = useState(false) // 本页成功后隐藏手动同步入口
+	const [successfulSyncId, setSuccessfulSyncId] = useState<string | null>(null)
 	const latestSongsRef = useRef<RadioSong[] | null>(null)
 	const roamingOpenRef = useRef(roamingOpen)
 	const socketRef = useRef<WebSocket | null>(null)
@@ -145,7 +145,7 @@ export default function useRadioLive(roamingOpen: boolean): RadioLiveState {
 			const running = state.phase === 'refreshing' || state.phase === 'syncing'
 			// 首次进入不弹历史结果；断线期间已知任务完成后仍补上提示
 			if (snapshot && !running && !previous) return
-			if (state.phase === 'success') setSyncSucceeded(true)
+			if (state.phase === 'success') setSuccessfulSyncId(state.id)
 			if (previous?.id === state.id && previous.phase === state.phase) return
 			noticeRef.current = { id: state.id, phase: state.phase }
 			const notice = { id: 'netease-sync', description: state.message }
@@ -228,8 +228,9 @@ export default function useRadioLive(roamingOpen: boolean): RadioLiveState {
 		}
 	}, [connectionKey, clearPending, clearSync])
 
-	const syncNetease = () => {
-		if (syncSucceeded || pendingRef.current || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing') return
+	// 保持同步回调稳定，避免无关状态更新重建按钮防抖
+	const syncNetease = useCallback(() => {
+		if (pendingRef.current || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing') return
 		const socket = socketRef.current
 		if (status !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN) {
 			toast.error('实时连接尚未就绪，请稍后重试')
@@ -251,7 +252,7 @@ export default function useRadioLive(roamingOpen: boolean): RadioLiveState {
 			toast.error('同步请求发送失败，请重连后重试')
 			socket.close()
 		}
-	}
+	}, [clearPending, neteaseSync?.phase, status])
 
-	return { options, songs, status, neteaseSync, syncPending, syncSucceeded, syncNetease, reconnect, reauthenticate }
+	return { options, songs, status, neteaseSync, syncPending, successfulSyncId, syncNetease, reconnect, reauthenticate }
 }

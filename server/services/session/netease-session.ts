@@ -19,11 +19,15 @@ let verifiedUntil = 0
 let verification: Promise<boolean> | null = null
 let refresh: Promise<void> | null = null
 let refreshSyncId: string | null = null
+let nextManualSyncAt = 0
 
 // 串行更新网易云凭证，避免登录、刷新和失效清理互相覆盖
 function updateSession<T>(update: () => Promise<T>) {
 	const next = pendingUpdate.then(update)
-	pendingUpdate = next.then(() => {}, () => {})
+	pendingUpdate = next.then(
+		() => {},
+		() => {}
+	)
 	return next
 }
 
@@ -42,7 +46,7 @@ async function persistCookie(value: string) {
 async function validateCookie(value: string) {
 	if (!isNeteaseCookie(value)) throw new ApiError(401, '网易云登录 Cookie 无效')
 	const account = await readNeteaseAccount(value)
-	if (account.uid !== config.NETEASE_UID) throw new ApiError(403, '扫码账号与电台 UID 不匹配，原登录态未更改')
+	if (account.uid !== config.NETEASE_UID) throw new ApiError(403, '扫码账号与电台 UID 不匹配，登录失败')
 	if (!isNeteaseCookie(account.cookie)) throw new ApiError(401, '网易云登录已失效')
 	return account.cookie
 }
@@ -130,10 +134,16 @@ export async function withSessionCookie<T extends { body: { code: number } }>(re
 	}
 }
 
-// 手动任务共用一个标识，重复点击只订阅当前任务，不重复触发同步
+// 手动同步全局节流 30 秒，失败后允许立即重试，在途任务继续复用
 export function startNeteaseSync() {
 	getSessionCookie()
 	const current = getNeteaseSyncState()
+	const now = Date.now()
+	const remainingMs = nextManualSyncAt - now
+	if (remainingMs > 0 && current?.phase !== 'error') {
+		throw new ApiError(429, `同步数据过于频繁，请 ${Math.ceil(remainingMs / 1000)} 秒后重试`)
+	}
+	nextManualSyncAt = now + 30_000
 	if (current?.phase === 'refreshing' || current?.phase === 'syncing') return current
 	const state = publishNeteaseSync({ id: randomUUID(), phase: 'refreshing', message: '正在刷新网易云 Cookie…' })
 	refreshSession(state.id).catch(() => console.warn('[漫游同步] 手动刷新网易云 Cookie 失败'))
