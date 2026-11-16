@@ -1,14 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { ApiError, isRecord } from '../utils/ncm.js'
-import { checkBrowserQr, createBrowserQr } from '../services/qr-code.js'
+import { checkBrowserQr, createBrowserQr } from '../http/qr-code.js'
+import { ApiError } from '../utils/api-error.js'
+import { isRecord } from '../utils/object.js'
+import { normalizeRequestPath } from '../utils/request-path.js'
 
-// 拦截原生扫码 Key 和状态接口，转交服务层处理，不返回账号 Cookie
-export default async function useQrInterceptor(request: FastifyRequest, reply: FastifyReply) {
+// 拦截原生扫码 Key 和状态接口，转交扫码流程，不返回账号 Cookie
+export default async function qrInterceptor(request: FastifyRequest, reply: FastifyReply) {
 	let path: string
 	try {
-		path = decodeURIComponent(request.url.split('?')[0] || '')
-			.replace(/\/+$/, '')
-			.toLowerCase()
+		path = normalizeRequestPath(request.url)
 	} catch {
 		return reply.code(400).send({ code: 400, message: '请求路径不合法' })
 	}

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import config from '../config.js'
-import { ApiError, ncmApi, ncmOptions } from '../utils/ncm.js'
-import { withSessionCookie } from '../services/netease-session.js'
+import { ncmApi, ncmOptions } from '../integrations/netease/client.js'
+import { ApiError } from '../utils/api-error.js'
+import { withSessionCookie } from '../services/session/netease-session.js'
 
 interface Pagination {
 	limit: number

@@ -1,11 +1,19 @@
 'use client'
 
-import { createContext, useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 export interface RadioOptions {
 	guestRoamingEnabled: boolean
 	emojiChatEnabled: boolean
+}
+
+export interface RadioSong {
+	id: string
+	name: string
+	artists: string[]
+	picUrl: string
+	duration: number
 }
 
 export interface NeteaseSyncState {
@@ -16,9 +24,11 @@ export interface NeteaseSyncState {
 
 export interface RadioLiveState {
 	options: RadioOptions | null
+	songs: RadioSong[] | null
 	status: 'loading' | 'ready' | 'error'
 	neteaseSync: NeteaseSyncState | null
 	syncPending: boolean
+	syncSucceeded: boolean
 	syncNetease: () => void
 	reconnect: () => void
 	reauthenticate: () => void
@@ -28,6 +38,20 @@ export const RadioLiveContext = createContext<RadioLiveState | null>(null)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isRadioSong(value: unknown): value is RadioSong {
+	return (
+		isRecord(value) &&
+		typeof value.id === 'string' &&
+		typeof value.name === 'string' &&
+		Array.isArray(value.artists) &&
+		value.artists.every((artist: unknown) => typeof artist === 'string') &&
+		typeof value.picUrl === 'string' &&
+		typeof value.duration === 'number' &&
+		Number.isFinite(value.duration) &&
+		value.duration >= 0
+	)
 }
 
 function readSyncState(value: unknown): NeteaseSyncState {
@@ -42,12 +66,16 @@ function readSyncState(value: unknown): NeteaseSyncState {
 }
 
 // 页面共用一条实时连接，弹窗关闭后仍接收手动同步的最终结果
-export default function useRadioLive(): RadioLiveState {
+export default function useRadioLive(roamingOpen: boolean): RadioLiveState {
 	const [options, setOptions] = useState<RadioOptions | null>(null)
+	const [songs, setSongs] = useState<RadioSong[] | null>(null)
 	const [status, setStatus] = useState<RadioLiveState['status']>('loading')
 	const [connectionKey, setConnectionKey] = useState(0)
 	const [neteaseSync, setNeteaseSync] = useState<NeteaseSyncState | null>(null)
 	const [syncPending, setSyncPending] = useState(false)
+	const [syncSucceeded, setSyncSucceeded] = useState(false) // 本页成功后隐藏手动同步入口
+	const latestSongsRef = useRef<RadioSong[] | null>(null)
+	const roamingOpenRef = useRef(roamingOpen)
 	const socketRef = useRef<WebSocket | null>(null)
 	const pendingRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null)
 	const noticeRef = useRef<Pick<NeteaseSyncState, 'id' | 'phase'> | null>(null)
@@ -76,6 +104,12 @@ export default function useRadioLive(): RadioLiveState {
 		resetSession()
 		authChannelRef.current?.postMessage('changed')
 	}, [resetSession])
+
+	// 漫游期间保留展示快照，关闭后应用最新列表，切换界面不重建连接
+	useLayoutEffect(() => {
+		roamingOpenRef.current = roamingOpen
+		if (!roamingOpen) setSongs(latestSongsRef.current)
+	}, [roamingOpen])
 
 	// 登录或退出后重新握手，其他标签页也使用新的 HttpOnly Cookie
 	useEffect(() => {
@@ -111,6 +145,7 @@ export default function useRadioLive(): RadioLiveState {
 			const running = state.phase === 'refreshing' || state.phase === 'syncing'
 			// 首次进入不弹历史结果；断线期间已知任务完成后仍补上提示
 			if (snapshot && !running && !previous) return
+			if (state.phase === 'success') setSyncSucceeded(true)
 			if (previous?.id === state.id && previous.phase === state.phase) return
 			noticeRef.current = { id: state.id, phase: state.phase }
 			const notice = { id: 'netease-sync', description: state.message }
@@ -137,6 +172,13 @@ export default function useRadioLive(): RadioLiveState {
 						}
 						setOptions({ guestRoamingEnabled: data.guestRoamingEnabled, emojiChatEnabled: data.emojiChatEnabled })
 						setStatus('ready')
+					} else if (message.type === 'radio-songs') {
+						const songs = message.data
+						if (!Array.isArray(songs) || !songs.every(isRadioSong)) throw new Error('漫游歌曲列表数据异常')
+						// 首份数据允许结束加载，已有卡片在漫游期间保持不变
+						const firstSnapshot = latestSongsRef.current === null
+						latestSongsRef.current = songs
+						if (!roamingOpenRef.current || firstSnapshot) setSongs(songs)
 					} else if (message.type === 'netease-sync') {
 						if (typeof message.snapshot !== 'boolean') throw new Error('网易云同步消息异常')
 						applySync(message.data, message.snapshot)
@@ -187,7 +229,7 @@ export default function useRadioLive(): RadioLiveState {
 	}, [connectionKey, clearPending, clearSync])
 
 	const syncNetease = () => {
-		if (pendingRef.current || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing') return
+		if (syncSucceeded || pendingRef.current || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing') return
 		const socket = socketRef.current
 		if (status !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN) {
 			toast.error('实时连接尚未就绪，请稍后重试')
@@ -211,5 +253,5 @@ export default function useRadioLive(): RadioLiveState {
 		}
 	}
 
-	return { options, status, neteaseSync, syncPending, syncNetease, reconnect, reauthenticate }
+	return { options, songs, status, neteaseSync, syncPending, syncSucceeded, syncNetease, reconnect, reauthenticate }
 }

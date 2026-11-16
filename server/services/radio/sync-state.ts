@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
-import { ApiError, isRecord } from '../utils/ncm.js'
+import { ApiError } from '../../utils/api-error.js'
+import { isRecord } from '../../utils/object.js'
 
 export interface NeteaseSyncState {
 	id: string

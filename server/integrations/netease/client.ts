@@ -1,5 +1,5 @@
-import api from '../ncm-api/main.js'
-import type * as NcmApi from '../ncm-api/interface.js'
+import api from '../../ncm-api/main.js'
+import type * as NcmApi from '../../ncm-api/interface.js'
 
 export const ncmApi: Pick<
 	typeof NcmApi,
@@ -24,18 +24,3 @@ export const ncmApi: Pick<
 	login_qr_check: api.login_qr_check
 }
 export const ncmOptions = { timeout: 10_000 }
-
-export class ApiError extends Error {
-	constructor(
-		readonly statusCode: number,
-		message: string,
-		readonly code = statusCode
-	) {
-		super(message)
-		this.name = 'ApiError'
-	}
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}

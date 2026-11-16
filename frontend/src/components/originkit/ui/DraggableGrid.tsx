@@ -7,6 +7,10 @@ import styles from '@/styles/draggable-grid.module.css'
 import TiltedCard from './TiltedCard'
 
 export interface GridItem {
+	id?: string
+	name?: string
+	artists?: string[]
+	duration?: number
 	image?: { src?: string; srcSet?: string; alt?: string }
 	alt?: string
 }
@@ -408,7 +412,7 @@ export default function DraggableGrid({
 						column >= visibleRange.firstColumn && column <= visibleRange.lastColumn && row >= visibleRange.firstRow && row <= visibleRange.lastRow
 					const item = safeItems[index]
 					const src = item.image?.src
-					const alt = item.alt ?? item.image?.alt ?? ''
+					const alt = item.alt ?? item.image?.alt ?? item.name ?? ''
 					const failed = src ? failedImages.has(src) : false
 					return (
 						<motion.div
@@ -446,6 +450,9 @@ export default function DraggableGrid({
 									imageSrc={failed ? undefined : src}
 									srcSet={item.image?.srcSet}
 									altText={alt}
+									name={item.name}
+									artists={item.artists}
+									duration={item.duration}
 									radius={radius}
 									smoothness={0}
 									backgroundColor={src && !failed ? placeholderColor : getItemColor(index)}

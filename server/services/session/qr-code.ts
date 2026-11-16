@@ -1,20 +1,7 @@
-import { randomBytes } from 'node:crypto'
-import type { FastifyReply, FastifyRequest } from 'fastify'
-import { ApiError, isRecord, ncmApi, ncmOptions } from '../utils/ncm.js'
+import { createLoginQr, readLoginQrStatus, type LoginQr } from '../../integrations/netease/auth.js'
+import { ApiError } from '../../utils/api-error.js'
+import { revokeBrowserSession, type BrowserSession } from './browser-session.js'
 import { saveSessionCookie } from './netease-session.js'
-import {
-	browserSessionMaxAge,
-	hasBrowserSession,
-	readBrowserToken,
-	revokeBrowserSession,
-	setBrowserToken,
-	type BrowserSession
-} from './browser-session.js'
-
-interface LoginQr {
-	key: string
-	image: string
-}
 
 interface QrStatus {
 	code: number
@@ -79,17 +66,7 @@ export function createQr(token: string, ip: string): Promise<LoginQr> {
 	if (previousGeneration !== undefined && now - previousGeneration < qrThrottleInterval) throw new ApiError(429, '二维码生成过于频繁，请稍后重试')
 	generationTimes.set(ip, now)
 
-	const qr = (async () => {
-		const response = await ncmApi.login_qr_key({ ...ncmOptions, cookie: '' })
-		if (response.body.code !== 200) throw response
-		const data = response.body.data
-		if (!isRecord(data) || typeof data.unikey !== 'string') throw new ApiError(502, '网易云未返回二维码登录 Key')
-		const key = data.unikey
-		const image = await ncmApi.login_qr_create({ ...ncmOptions, key, qrimg: true, cookie: '' })
-		const qrData = image.body.data
-		if (!isRecord(qrData) || typeof qrData.qrimg !== 'string') throw new ApiError(502, '二维码生成失败')
-		return { key, image: qrData.qrimg }
-	})()
+	const qr = createLoginQr()
 	attempts.set(token, { time: now, qr, checkedAt: 0, status: null, poll: null })
 	return qr
 }
@@ -103,19 +80,17 @@ export async function checkQr(token: string, key: string): Promise<QrStatus> {
 	if (attempt.status && ([800, 803].includes(attempt.status.code) || Date.now() - attempt.checkedAt < statusCacheInterval)) return attempt.status
 
 	const poll = (async (): Promise<QrStatus> => {
-		const response = await ncmApi.login_qr_check({ ...ncmOptions, key, cookie: '' })
-		if (![800, 801, 802, 803].includes(response.body.code)) throw response
+		const status = await readLoginQrStatus(key)
 		if (attempts.get(token) !== attempt) return { code: 800, message: expiredMessage }
 		let session: BrowserSession | undefined
-		if (response.body.code === 803) {
-			const cookie = (response.cookie || []).map(item => item.split(';')[0]).join('; ')
-			session = await saveSessionCookie(cookie, token)
+		if (status.code === 803) {
+			session = await saveSessionCookie(status.cookie, token)
 			if (attempts.get(token) !== attempt) {
 				await revokeBrowserSession(session.token)
 				return { code: 800, message: expiredMessage }
 			}
 		}
-		return { code: response.body.code, message: messages[response.body.code] || '登录状态异常', session }
+		return { code: status.code, message: messages[status.code] || '登录状态异常', session }
 	})()
 	attempt.poll = poll
 	try {
@@ -128,23 +103,3 @@ export async function checkQr(token: string, key: string): Promise<QrStatus> {
 	}
 }
 
-// 读取或创建扫码标识，将二维码绑定到当前浏览器
-export async function createBrowserQr(request: FastifyRequest, reply: FastifyReply) {
-	let token = readBrowserToken(request)
-	if (!token) {
-		token = randomBytes(32).toString('hex')
-		// 扫码前只标识浏览器，没有数据库会话记录就不算登录
-		setBrowserToken(request, reply, { token, expiresAt: Date.now() + browserSessionMaxAge * 1000 })
-	}
-	return createQr(token, request.ip)
-}
-
-// 扫码成功后写入正式 token，响应中只返回扫码状态
-export async function checkBrowserQr(request: FastifyRequest, reply: FastifyReply, key: string) {
-	const result = await checkQr(readBrowserToken(request), key)
-	if (result.session) {
-		if (!(await hasBrowserSession(result.session.token))) return { code: 800, message: '登录已失效，请重新生成二维码' }
-		setBrowserToken(request, reply, result.session)
-	}
-	return { code: result.code, message: result.message }
-}

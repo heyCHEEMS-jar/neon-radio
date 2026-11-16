@@ -1,19 +1,17 @@
-import config from '../config.js'
-import { ApiError, isRecord, ncmApi, ncmOptions } from '../utils/ncm.js'
-import { publishNeteaseSync, readNeteaseSyncError } from './netease-sync-state.js'
-import { replaceRoamingSongs } from './roaming-song-repository.js'
+import { ApiError } from '../../utils/api-error.js'
+import { isRecord } from '../../utils/object.js'
+import { ncmApi, ncmOptions } from './client.js'
 
-interface ManualRoamingSync {
+export interface RoamingSong {
 	id: string
-	refreshError: string | null
+	name: string
+	artists: string[]
+	data: Record<string, unknown>
 }
 
 const playlistPageSize = 1000
 const songPageSize = 500
 const concurrency = 4
-let nextCookie = ''
-let nextManualSync: ManualRoamingSync | null = null
-let pendingSync: Promise<void> | null = null
 
 function readResponseBody(response: { body: unknown }) {
 	if (!isRecord(response.body) || response.body.code !== 200) throw new ApiError(502, '网易云漫游数据返回异常')
@@ -28,29 +26,23 @@ function readId(value: unknown) {
 	return id
 }
 
-// 歌曲名和全部歌手名共同去重，歌手排列顺序不影响身份
-function readSong(value: unknown) {
+function readSong(value: unknown): RoamingSong {
 	if (!isRecord(value) || typeof value.name !== 'string' || !value.name.trim() || !Array.isArray(value.ar) || !value.ar.length) {
 		throw new ApiError(502, '网易云返回的歌曲名称或歌手信息不完整')
 	}
 	const artists = value.ar.map((artist: unknown) => {
-		if (!isRecord(artist) || typeof artist.name !== 'string' || !artist.name.trim()) {
-			throw new ApiError(502, '网易云返回的歌手信息不完整')
-		}
+		if (!isRecord(artist) || typeof artist.name !== 'string' || !artist.name.trim()) throw new ApiError(502, '网易云返回的歌手信息不完整')
 		return artist.name.trim()
 	})
-	return {
-		id: readId(value.id),
-		key: JSON.stringify([value.name.trim(), Array.from(new Set(artists)).sort()]),
-		data: value
-	}
+	return { id: readId(value.id), name: value.name.trim(), artists, data: value }
 }
 
-async function collectRoamingSongs(cookie: string) {
+// 按批交付歌曲，分页、响应校验和并发上限留在接口适配层
+export async function fetchRoamingSongs(uid: string, cookie: string, onSongs: (songs: readonly RoamingSong[]) => void) {
 	const playlistIds = new Set<string>()
 	// 按 more 分页读取创建及收藏的全部歌单，不只取首屏
 	for (let offset = 0; ; offset += playlistPageSize) {
-		const body = readResponseBody(await ncmApi.user_playlist({ ...ncmOptions, uid: config.NETEASE_UID, limit: playlistPageSize, offset, cookie }))
+		const body = readResponseBody(await ncmApi.user_playlist({ ...ncmOptions, uid, limit: playlistPageSize, offset, cookie }))
 		if (!Array.isArray(body.playlist) || typeof body.more !== 'boolean') throw new ApiError(502, '网易云返回的歌单分页数据异常')
 		const previousCount = playlistIds.size
 		for (const playlist of body.playlist) {
@@ -87,7 +79,6 @@ async function collectRoamingSongs(cookie: string) {
 	}
 
 	const ids = Array.from(songIds)
-	const songs = new Map<string, Record<string, unknown>>()
 	// 歌曲详情分批读取，每次不超过接口允许的 1000 首
 	for (let offset = 0; offset < ids.length; offset += songPageSize * concurrency) {
 		const batches: string[][] = []
@@ -106,67 +97,8 @@ async function collectRoamingSongs(cookie: string) {
 		)
 		for (const result of results) {
 			if (result.status === 'rejected') throw result.reason
-			for (const song of result.value) {
-				if (!songs.has(song.key)) songs.set(song.key, song.data)
-			}
+			onSongs(result.value)
 		}
 	}
-	return { songs, playlistCount: playlists.length, trackCount: ids.length }
-}
-
-async function runRoamingSync() {
-	while (nextCookie) {
-		const cookie = nextCookie
-		const manualSync = nextManualSync
-		nextCookie = ''
-		nextManualSync = null
-		if (manualSync) {
-			publishNeteaseSync({
-				id: manualSync.id,
-				phase: 'syncing',
-				message: manualSync.refreshError ? 'Cookie 刷新失败，正在后台同步歌曲…' : 'Cookie 已刷新，正在后台同步歌曲…'
-			})
-		}
-		try {
-			const { songs, playlistCount, trackCount } = await collectRoamingSongs(cookie)
-			await replaceRoamingSongs(config.NETEASE_UID, songs)
-			const message = `已读取 ${playlistCount} 个歌单、${trackCount} 首歌曲，去重后入库 ${songs.size} 首`
-			console.info(`[漫游同步] ${message}`)
-			if (manualSync) {
-				publishNeteaseSync({
-					id: manualSync.id,
-					phase: manualSync.refreshError ? 'error' : 'success',
-					message: manualSync.refreshError ? `Cookie 刷新失败：${manualSync.refreshError}；${message}` : message
-				})
-			}
-		} catch (error: unknown) {
-			// 不记录网易云原始响应，避免 Cookie 被写入日志
-			console.warn(`[漫游同步] 失败，保留上次列表：${error instanceof Error ? error.message : '网易云请求失败'}`)
-			if (manualSync) {
-				const message = `歌曲同步失败，保留上次列表：${readNeteaseSyncError(error)}`
-				publishNeteaseSync({
-					id: manualSync.id,
-					phase: 'error',
-					message: manualSync.refreshError ? `Cookie 刷新失败：${manualSync.refreshError}；${message}` : message
-				})
-			}
-		}
-	}
-}
-
-// 后端独立同步；在途触发合并为一次后续同步，自动触发不覆盖手动任务标识
-export function scheduleRoamingSync(cookie: string, manualSync: ManualRoamingSync | null = null) {
-	if (!cookie) return
-	nextCookie = cookie
-	if (manualSync) nextManualSync = manualSync
-	if (pendingSync) return
-	pendingSync = runRoamingSync().finally(() => {
-		pendingSync = null
-		if (nextCookie) scheduleRoamingSync(nextCookie)
-	})
-}
-
-// 关闭数据库前等待全部后台同步结束
-export async function waitForRoamingSync() {
-	while (pendingSync) await pendingSync
+	return { playlistCount: playlists.length, trackCount: ids.length }
 }

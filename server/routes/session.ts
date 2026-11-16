@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify'
-import { getSessionStatus, saveSessionCookie, verifySession } from '../services/netease-session.js'
-import { checkBrowserQr, createBrowserQr, discardQr, hasPendingQr } from '../services/qr-code.js'
-import { hasBrowserSession, readBrowserToken, revokeBrowserSession, setBrowserToken } from '../services/browser-session.js'
+import { readBrowserToken, setBrowserToken } from '../http/browser-token.js'
+import { checkBrowserQr, createBrowserQr } from '../http/qr-code.js'
+import { hasBrowserSession, revokeBrowserSession } from '../services/session/browser-session.js'
+import { getSessionStatus, saveSessionCookie, verifySession } from '../services/session/netease-session.js'
+import { discardQr, hasPendingQr } from '../services/session/qr-code.js'
 
 // 注册登录状态、扫码和退出接口
 export default async function sessionRoutes(fastify: FastifyInstance) {

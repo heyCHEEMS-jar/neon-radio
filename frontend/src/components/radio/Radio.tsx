@@ -24,12 +24,11 @@ function LoadError({ open, onClose }: RoamingProps) {
 }
 
 export default function Radio({ children }: { children: ReactNode }) {
-	const live = useRadioLive()
 	const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
-	const [loadGrid, setLoadGrid] = useState(false)
 	// 入场期间保留静止底图，面板覆盖屏幕后再隐藏
 	const [roamingPhase, setRoamingPhase] = useState<'closed' | 'entering' | 'open'>('closed')
 	const roaming = roamingPhase !== 'closed'
+	const live = useRadioLive(roaming)
 	const rootRef = useRef<HTMLDivElement>(null)
 	const wasRoaming = useRef(false)
 
@@ -41,22 +40,24 @@ export default function Radio({ children }: { children: ReactNode }) {
 
 	const openRoaming = () => {
 		if (roaming) return
-		setLoadGrid(true)
 		setRoamingPhase('entering')
 	}
 
-	// 页面加载完成后空闲预载，关闭时不卸载网格
+	// 页面加载后空闲预载组件代码，不挂载界面；预载失败留给打开时处理
 	useEffect(() => {
 		let idleId: number | undefined
 		const preload = () => {
-			if (typeof window.requestIdleCallback === 'function') {
-				idleId = window.requestIdleCallback(() => setLoadGrid(true), { timeout: 1500 })
-			} else setLoadGrid(true)
+			void import('./Roaming').catch(() => {})
 		}
-		if (document.readyState === 'complete') preload()
-		else window.addEventListener('load', preload, { once: true })
+		const schedulePreload = () => {
+			if (typeof window.requestIdleCallback === 'function') {
+				idleId = window.requestIdleCallback(preload, { timeout: 1500 })
+			} else preload()
+		}
+		if (document.readyState === 'complete') schedulePreload()
+		else window.addEventListener('load', schedulePreload, { once: true })
 		return () => {
-			window.removeEventListener('load', preload)
+			window.removeEventListener('load', schedulePreload)
 			if (idleId !== undefined) window.cancelIdleCallback(idleId)
 		}
 	}, [])
@@ -86,7 +87,7 @@ export default function Radio({ children }: { children: ReactNode }) {
 				{menuPosition && <Menu position={menuPosition} onOpenRoaming={openRoaming} onRestoreFocus={() => rootRef.current?.focus()} />}
 			</Suspense>
 			<Suspense fallback={null}>
-				{loadGrid && (
+				{roaming && (
 					<Roaming
 						open={roaming}
 						onClose={() => setRoamingPhase('closed')}

@@ -14,7 +14,7 @@ const optionMessages = {
 }
 
 export default function Options({ onClose }: { onClose: () => void }) {
-	const { options, status, load, update, neteaseSync, syncPending, sync } = useRadioOptions(true)
+	const { options, status, load, update, neteaseSync, syncPending, syncSucceeded, sync } = useRadioOptions(true)
 	const syncing = syncPending || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing'
 	const busy = status === 'saving' || syncPending
 	const syncMessage = syncPending ? '正在发送同步请求…' : neteaseSync?.message
@@ -83,21 +83,19 @@ export default function Options({ onClose }: { onClose: () => void }) {
 						重新加载
 					</button>
 				)}
-				<div className="space-y-3 border-t border-zinc-200 pt-4">
-					<p id="ncm-sync-description" className="text-sm text-zinc-500">
-						定时刷新 Cookie 并同步歌曲，点击手动同步。
-					</p>
-					<button
-						type="button"
-						onClick={sync}
-						disabled={status !== 'ready' || busy || syncing}
-						aria-describedby="ncm-sync-description"
-						className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						{syncing ? <Spinner aria-label="正在同步网易云数据" /> : <RefreshCw className="size-4" />}
-						{syncing ? '正在同步…' : '同步网易云数据'}
-					</button>
-				</div>
+				{!syncSucceeded && (
+					<div className="space-y-3 border-t border-zinc-200 pt-4">
+						<button
+							type="button"
+							onClick={sync}
+							disabled={status !== 'ready' || busy || syncing}
+							className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{syncing ? <Spinner aria-label="正在同步网易云数据" /> : <RefreshCw className="size-4" />}
+							{syncing ? '正在同步…' : '重新同步网易云数据'}
+						</button>
+					</div>
+				)}
 			</DialogContent>
 		</Dialog>
 	)

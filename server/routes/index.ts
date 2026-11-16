@@ -1,11 +1,6 @@
 import type { FastifyInstance } from 'fastify'
-import config from '../config.js'
-import { closeDatabase } from '../utils/db.js'
-import { ApiError, isRecord } from '../utils/ncm.js'
-import { initSession, refreshSession, waitForSessionUpdates } from '../services/netease-session.js'
-import { clearQrCache } from '../services/qr-code.js'
-import { initRoamingSongRepository } from '../services/roaming-song-repository.js'
-import { waitForRoamingSync } from '../services/roaming-sync.js'
+import { ApiError } from '../utils/api-error.js'
+import { isRecord } from '../utils/object.js'
 import playlistRoutes from './playlists.js'
 import sessionRoutes from './session.js'
 import radioOptionsRoutes from './radio-options.js'
@@ -19,8 +14,6 @@ const errorMessages: Record<number, string> = {
 }
 
 export default async function indexRoutes(fastify: FastifyInstance) {
-	await initSession()
-	await initRoamingSongRepository()
 	fastify.addHook('onRequest', async (_request, reply) => {
 		reply.header('Cache-Control', 'private, no-store')
 	})
@@ -40,18 +33,4 @@ export default async function indexRoutes(fastify: FastifyInstance) {
 	await fastify.register(sessionRoutes)
 	await fastify.register(radioOptionsRoutes)
 
-	const timer = setInterval(
-		() => {
-			void refreshSession().catch(() => fastify.log.warn('电台 Cookie 定时刷新失败'))
-		},
-		config.COOKIE_REFRESH_HOURS * 60 * 60 * 1000
-	)
-	timer.unref()
-	fastify.addHook('onClose', async () => {
-		clearInterval(timer)
-		clearQrCache()
-		await waitForSessionUpdates()
-		await waitForRoamingSync()
-		await closeDatabase()
-	})
 }

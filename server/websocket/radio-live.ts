@@ -1,11 +1,14 @@
 import type { IncomingMessage } from 'node:http'
 import type { FastifyInstance } from 'fastify'
 import WebSocket, { WebSocketServer } from 'ws'
-import { ApiError, isRecord } from '../utils/ncm.js'
-import { hasBrowserSession, readBrowserToken } from './browser-session.js'
-import { getSessionStatus, startNeteaseSync } from './netease-session.js'
-import { getNeteaseSyncState, neteaseSyncEvents, type NeteaseSyncState } from './netease-sync-state.js'
-import { getRadioOptions, radioOptionsEvents, type RadioOptions } from './radio-options.js'
+import { ApiError } from '../utils/api-error.js'
+import { isRecord } from '../utils/object.js'
+import { readBrowserToken } from '../http/browser-token.js'
+import { hasBrowserSession } from '../services/session/browser-session.js'
+import { getSessionStatus, startNeteaseSync } from '../services/session/netease-session.js'
+import { getNeteaseSyncState, neteaseSyncEvents, type NeteaseSyncState } from '../services/radio/sync-state.js'
+import { getRadioOptions, radioOptionsEvents, type RadioOptions } from '../services/radio/options.js'
+import { getRoamingSongs, roamingSongsEvents, type RadioSong } from '../services/radio/roaming-sync.js'
 
 // Next 代理会改写 Host，只信任本机代理转发的原始主机名
 function isSameOrigin(request: IncomingMessage) {
@@ -21,7 +24,7 @@ function isSameOrigin(request: IncomingMessage) {
 	}
 }
 
-// 配置公开下发，手动网易云同步的指令和结果都检查本站登录态
+// 配置和歌曲列表公开下发，手动网易云同步的指令和结果都检查本站登录态
 export default function initRadioLive(fastify: FastifyInstance) {
 	const server = new WebSocketServer({ server: fastify.server, path: '/neon-radio/live', maxPayload: 4096 })
 	const alive = new WeakSet<WebSocket>()
@@ -51,6 +54,20 @@ export default function initRadioLive(fastify: FastifyInstance) {
 		for (const socket of server.clients) send(socket, { type: 'radio-options', data: options })
 	}
 
+	// 歌曲快照向所有连接公开广播，整份列表只序列化一次
+	const broadcastSongs = (songs: RadioSong[]) => {
+		if (closing) return
+		const message = JSON.stringify({ type: 'radio-songs', data: songs })
+		for (const socket of server.clients) {
+			if (socket.readyState !== WebSocket.OPEN) continue
+			try {
+				socket.send(message)
+			} catch {
+				socket.terminate()
+			}
+		}
+	}
+
 	// 先捕获快照和接收者，再串行下发，异步鉴权不会把旧状态排到新状态后面
 	const sendSync = (state: NeteaseSyncState | null, snapshot = false, target?: WebSocket) => {
 		const sockets = target ? [target] : [...server.clients]
@@ -77,6 +94,7 @@ export default function initRadioLive(fastify: FastifyInstance) {
 		socket.on('pong', () => alive.add(socket))
 		socket.on('error', () => socket.terminate())
 		send(socket, { type: 'radio-options', data: getRadioOptions() })
+		send(socket, { type: 'radio-songs', data: getRoamingSongs() })
 		sendSync(getNeteaseSyncState(), true, socket)
 
 		socket.on('message', async (payload, binary) => {
@@ -123,6 +141,7 @@ export default function initRadioLive(fastify: FastifyInstance) {
 		})
 	})
 	radioOptionsEvents.on('change', broadcastOptions)
+	roamingSongsEvents.on('change', broadcastSongs)
 	neteaseSyncEvents.on('change', sendSync)
 
 	// 心跳清理断线客户端，让浏览器及时重连
@@ -143,6 +162,7 @@ export default function initRadioLive(fastify: FastifyInstance) {
 		closing = true
 		clearInterval(timer)
 		radioOptionsEvents.off('change', broadcastOptions)
+		roamingSongsEvents.off('change', broadcastSongs)
 		neteaseSyncEvents.off('change', sendSync)
 		for (const socket of server.clients) socket.terminate()
 		await pendingNotifications

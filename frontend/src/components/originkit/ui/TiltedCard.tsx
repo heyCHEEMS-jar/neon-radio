@@ -7,6 +7,9 @@ import styles from '@/styles/tilted-card.module.css'
 interface TiltedCardProps {
 	imageSrc?: string
 	altText?: string
+	name?: string
+	artists?: string[]
+	duration?: number
 	srcSet?: string
 	fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority']
 	onImageError?: ImgHTMLAttributes<HTMLImageElement>['onError']
@@ -26,6 +29,9 @@ interface TiltedCardProps {
 export default function TiltedCard({
 	imageSrc,
 	altText = '',
+	name,
+	artists = [],
+	duration,
 	srcSet,
 	fetchPriority = 'auto',
 	onImageError,
@@ -41,6 +47,10 @@ export default function TiltedCard({
 	style
 }: TiltedCardProps) {
 	const reducedMotion = useReducedMotion()
+	const artistNames = artists.join(' / ')
+	// 时长按毫秒接收，卡片显示为 mm:ss
+	const seconds = typeof duration === 'number' && Number.isFinite(duration) && duration >= 0 ? Math.floor(duration / 1000) : null
+	const durationText = seconds === null ? '' : `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 	const smoothing = Math.max(0, Math.min(1, smoothness))
 	const omega = 20 * Math.pow(0.2, smoothing)
 	const spring = { stiffness: omega * omega, damping: 2 * (1 - 0.3 * smoothing) * omega }
@@ -103,6 +113,25 @@ export default function TiltedCard({
 						fetchPriority={fetchPriority}
 						onError={onImageError}
 					/>
+				)}
+				{(name || artistNames || durationText) && (
+					<div className={styles.info}>
+						{name && (
+							<span className={styles.name} title={name}>
+								{name}
+							</span>
+						)}
+						{(artistNames || durationText) && (
+							<div className={styles.metadata}>
+								{artistNames && (
+									<span className={styles.artists} title={artistNames}>
+										{artistNames}
+									</span>
+								)}
+								{durationText && <span className={styles.duration}>{durationText}</span>}
+							</div>
+						)}
+					</div>
 				)}
 				<motion.span className={styles.glare} aria-hidden="true" style={{ background: light, opacity: highlight }} />
 				<span className={styles.rim} aria-hidden="true" />

@@ -1,16 +1,13 @@
-// Import the framework and instantiate it
 import { execSync } from 'node:child_process'
 import Fastify from 'fastify'
 import fastifyExpress from '@fastify/express'
 import config from './config.js'
 import ncmApi from './ncm-api/main.js'
 import indexRoutes from './routes/index.js'
-import useQrInterceptor from './hooks/useQrInterceptor.js'
-import useBrowserAuth from './hooks/useBrowserAuth.js'
-import useRequestPathGuard from './hooks/useRequestPathGuard.js'
-import { hasPendingQr } from './services/qr-code.js'
-import { readBrowserToken, setBrowserToken } from './services/browser-session.js'
-import initRadioLive from './services/radio-live.js'
+import qrInterceptor from './hooks/qr-interceptor.js'
+import browserAuth, { clearExpiredBrowserToken } from './hooks/browser-auth.js'
+import requestPathGuard from './hooks/request-path-guard.js'
+import radioPlugin from './plugins/radio.js'
 
 // 仅为 Windows 终端切换 UTF-8 代码页
 if (process.platform === 'win32' && process.stdout.isTTY) {
@@ -30,20 +27,14 @@ try {
 	fastify.setNotFoundHandler(async (_request, reply) => {
 		return reply.header('Cache-Control', 'no-store').code(404).send({ code: 404, message: '404 未知访问路径' })
 	})
-	fastify.addHook('onRequest', useRequestPathGuard)
-	fastify.addHook('onRequest', useBrowserAuth)
-	fastify.addHook('onRequest', useQrInterceptor)
-	// 鉴权失败时清除失效 Cookie，保留仍在扫码的临时标识
-	fastify.addHook('onSend', async (request, reply, payload) => {
-		if (reply.statusCode !== 401) return payload
-		const token = readBrowserToken(request)
-		if (token && !hasPendingQr(token)) setBrowserToken(request, reply)
-		return payload
-	})
+	fastify.addHook('onRequest', requestPathGuard)
+	fastify.addHook('onRequest', browserAuth)
+	fastify.addHook('onRequest', qrInterceptor)
+	fastify.addHook('onSend', clearExpiredBrowserToken)
 	await fastify.register(fastifyExpress) // 兼容 express
 	fastify.use('/neon-radio/ncm', await ncmApi.constructServer())
+	await fastify.register(radioPlugin)
 	await fastify.register(indexRoutes, { prefix: '/neon-radio' })
-	initRadioLive(fastify)
 
 	fastify.listen({ port: config.API_PORT }, (_err, address) => {
 		console.log(`

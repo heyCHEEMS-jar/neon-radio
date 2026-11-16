@@ -15,3 +15,7 @@ export function mergeCookies(current: string, updates: string[]) {
 	}
 	return Array.from(cookies, ([name, value]) => `${name}=${value}`).join('; ')
 }
+
+export function isNeteaseCookie(value: string, allowEmpty = false) {
+	return value.length <= 16_384 && !/[\r\n]/.test(value) && ((allowEmpty && !value) || /(?:^|;\s*)MUSIC_U=[^;]+/.test(value))
+}

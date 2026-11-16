@@ -1,10 +1,8 @@
 import type { FastifyInstance } from 'fastify'
-import { getRadioOptions, initRadioOptions, updateRadioOption, type RadioOptions } from '../services/radio-options.js'
+import { getRadioOptions, updateRadioOption, type RadioOptions } from '../services/radio/options.js'
 
 export default async function radioOptionsRoutes(fastify: FastifyInstance) {
-	await initRadioOptions()
-
-	fastify.get('/radio-options', async () => ({ code: 200, data: await getRadioOptions() }))
+	fastify.get('/radio-options', () => ({ code: 200, data: getRadioOptions() }))
 
 	fastify.patch<{ Body: { key: keyof RadioOptions; enabled: boolean } }>(
 		'/radio-options',

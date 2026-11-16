@@ -6,7 +6,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 // 校验请求路径的项目目录边界
-export default async function useRequestPathGuard(request: FastifyRequest, reply: FastifyReply) {
+export default async function requestPathGuard(request: FastifyRequest, reply: FastifyReply) {
 	let requestPath: string
 	try {
 		requestPath = decodeURIComponent(request.url.split('?')[0] || '')
