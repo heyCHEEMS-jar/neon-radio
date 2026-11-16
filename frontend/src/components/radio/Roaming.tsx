@@ -50,10 +50,11 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 			</header>
 			<DraggableGrid
 				active={open}
-				columns={6}
+				columns={5}
 				overscan={2}
-				mobileColumns={4}
+				mobileColumns={3}
 				mobileOverscan={1}
+				gap={3}
 				fitViewport
 				tilt
 				enableWheel

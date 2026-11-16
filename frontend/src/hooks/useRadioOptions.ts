@@ -1,13 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { debounce } from '@/utils/util'
-
-interface RadioOptions {
-	guestRoamingEnabled: boolean
-	emojiChatEnabled: boolean
-}
+import { RadioLiveContext, type RadioOptions } from './useRadioLive'
 
 interface RadioOptionUpdate {
 	key: keyof RadioOptions
@@ -20,12 +16,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function requestRadioOptions(signal: AbortSignal, update?: RadioOptionUpdate): Promise<RadioOptions> {
+async function requestRadioOptions(signal: AbortSignal, update: RadioOptionUpdate): Promise<RadioOptions> {
 	const response = await fetch('/neon-radio/radio-options', {
-		method: update ? 'PATCH' : 'GET',
+		method: 'PATCH',
 		cache: 'no-store',
 		signal,
-		...(update ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update) } : {})
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(update)
 	})
 	if (!response.headers.get('content-type')?.includes('application/json')) {
 		throw new Error(`服务端未正常响应（HTTP ${response.status}）`)
@@ -43,32 +40,14 @@ async function requestRadioOptions(signal: AbortSignal, update?: RadioOptionUpda
 }
 
 export default function useRadioOptions(open: boolean) {
-	const [options, setOptions] = useState<RadioOptions | null>(null)
-	const [status, setStatus] = useState<OptionsStatus>('loading')
+	const live = useContext(RadioLiveContext)
+	if (!live) throw new Error('电台选项需要放在电台实时管线内')
+	const [saving, setSaving] = useState(false)
+	const status: OptionsStatus = saving ? 'saving' : live.status
 	const requestRef = useRef<AbortController | null>(null)
 	const pendingUpdates = useRef(new Map<keyof RadioOptions, boolean>())
 
-	const load = useCallback(async () => {
-		if (requestRef.current) return
-		const controller = new AbortController()
-		requestRef.current = controller
-		setOptions(null)
-		setStatus('loading')
-		try {
-			const data = await requestRadioOptions(controller.signal)
-			if (controller.signal.aborted) return
-			setOptions(data)
-			setStatus('ready')
-		} catch (error: unknown) {
-			if (controller.signal.aborted) return
-			setStatus('error')
-			toast.error('读取电台选项失败', { description: error instanceof Error ? error.message : '请稍后重试' })
-		} finally {
-			if (requestRef.current === controller) requestRef.current = null
-		}
-	}, [])
-
-	// 合并短时间内的修改，保存成功后才更新开关
+	// 合并短时间内的修改，保存成功后由实时管线更新开关
 	const save = useMemo(
 		() =>
 			debounce(async () => {
@@ -77,14 +56,13 @@ export default function useRadioOptions(open: boolean) {
 				pendingUpdates.current.clear()
 				const controller = new AbortController()
 				requestRef.current = controller
-				setStatus('saving')
+				setSaving(true)
 				try {
-					// 依次保存，避免整份配置响应乱序覆盖
+					// 依次保存，不用 HTTP 响应覆盖较新的实时快照
 					for (const [key, enabled] of updates) {
 						try {
-							const data = await requestRadioOptions(controller.signal, { key, enabled })
+							await requestRadioOptions(controller.signal, { key, enabled })
 							if (controller.signal.aborted) return
-							setOptions(data)
 						} catch (error: unknown) {
 							if (controller.signal.aborted) return
 							toast.error('保存电台选项失败', { description: error instanceof Error ? error.message : '请稍后重试' })
@@ -93,36 +71,42 @@ export default function useRadioOptions(open: boolean) {
 				} finally {
 					if (requestRef.current === controller) {
 						requestRef.current = null
-						setStatus('ready')
+						setSaving(false)
 					}
 				}
 			}, 300),
 		[]
 	)
 
-	// 关闭弹窗时清理防抖任务和在途请求
+	// 关闭弹窗时清理防抖任务和在途保存请求，实时连接继续由页面维护
 	useEffect(() => {
 		if (!open) {
-			setOptions(null)
-			setStatus('loading')
+			setSaving(false)
 			return
 		}
-		void load()
 		return () => {
 			save.cancel()
 			pendingUpdates.current.clear()
 			requestRef.current?.abort()
 			requestRef.current = null
 		}
-	}, [open, load, save])
+	}, [open, save])
 
 	const update = (key: keyof RadioOptions, enabled: boolean) => {
-		if (!options || requestRef.current) return
-		if (options[key] === enabled) pendingUpdates.current.delete(key)
+		if (!open || !live.options || live.status !== 'ready' || requestRef.current) return
+		if (live.options[key] === enabled) pendingUpdates.current.delete(key)
 		else pendingUpdates.current.set(key, enabled)
 		if (pendingUpdates.current.size) save()
 		else save.cancel()
 	}
 
-	return { options, status, load, update }
+	return {
+		options: live.options,
+		status,
+		load: live.reconnect,
+		update,
+		neteaseSync: live.neteaseSync,
+		syncPending: live.syncPending,
+		sync: live.syncNetease
+	}
 }

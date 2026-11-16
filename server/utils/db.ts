@@ -1,4 +1,4 @@
-import mysql from 'mysql2/promise'
+import mysql, { type RowDataPacket } from 'mysql2/promise'
 import config from '../config.js'
 
 const connectionOptions = {
@@ -28,6 +28,20 @@ export async function ensureDatabase() {
 	} finally {
 		await connection.end()
 	}
+}
+
+// 只迁移仍含毫秒的旧列，新表和已迁移的列不重复执行 DDL
+export async function ensureSecondPrecision(table: string, column: string) {
+	const [rows] = await pool.execute<RowDataPacket[]>(
+		`SELECT 1 FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?
+			AND DATA_TYPE = 'datetime' AND DATETIME_PRECISION > 0
+		LIMIT 1`,
+		[config.DB_NAME, table, column]
+	)
+	if (!rows.length) return
+	await pool.query("UPDATE ?? SET ?? = DATE_FORMAT(??, '%Y-%m-%d %H:%i:%s') WHERE MICROSECOND(??) <> 0", [table, column, column, column])
+	await pool.query('ALTER TABLE ?? MODIFY COLUMN ?? DATETIME NOT NULL', [table, column])
 }
 
 let closePromise: Promise<void> | null = null

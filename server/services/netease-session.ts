@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import config, { validateConfig } from '../config.js'
@@ -6,6 +7,8 @@ import { decodeNeteaseSessionKey, decryptNeteaseSessionCookie, encryptNeteaseSes
 import { ApiError, isRecord, ncmApi, ncmOptions } from '../utils/ncm.js'
 import { findNeteaseSession, initNeteaseSessionRepository, upsertNeteaseSession } from './netease-session-repository.js'
 import { createBrowserSession, initBrowserSessions, revokeBrowserSessions } from './browser-session.js'
+import { getNeteaseSyncState, publishNeteaseSync, readNeteaseSyncError } from './netease-sync-state.js'
+import { scheduleRoamingSync } from './roaming-sync.js'
 
 const cookieFile = path.resolve('.data/netease-session.json')
 const cookieTempFile = `${cookieFile}.tmp`
@@ -19,6 +22,8 @@ let encryptionKey: Buffer | null = null
 let pendingUpdate = Promise.resolve()
 let verifiedUntil = 0
 let verification: Promise<boolean> | null = null
+let refresh: Promise<void> | null = null
+let refreshSyncId: string | null = null
 
 interface LegacySession {
 	cookie: string
@@ -171,11 +176,13 @@ export function getSessionCookie() {
 	return cookie
 }
 
-// 先校验并保存网易云 Cookie，再签发当前浏览器的本站会话
+// 登录会话创建成功后触发独立的后台歌曲同步
 export function saveSessionCookie(value: string, previousToken = '') {
 	return updateSession(async () => {
 		await persistCookie(await validateCookie(value.trim()))
-		return createBrowserSession(previousToken)
+		const session = await createBrowserSession(previousToken)
+		scheduleRoamingSync(cookie)
+		return session
 	})
 }
 
@@ -202,7 +209,9 @@ export function verifySession() {
 			await persistCookie('')
 			return false
 		}
-	}).finally(() => { verification = null })
+	}).finally(() => {
+		verification = null
+	})
 	return verification
 }
 
@@ -224,20 +233,47 @@ export async function withSessionCookie<T extends { body: { code: number } }>(re
 	}
 }
 
-// 定时刷新网易云 Cookie，确认失效时撤销全部本站会话
-export function refreshSession() {
-	return updateSession(async () => {
-		if (!cookie) return
+// 手动任务共用一个标识，重复点击只订阅当前任务，不重复触发同步
+export function startNeteaseSync() {
+	getSessionCookie()
+	const current = getNeteaseSyncState()
+	if (current?.phase === 'refreshing' || current?.phase === 'syncing') return current
+	const state = publishNeteaseSync({ id: randomUUID(), phase: 'refreshing', message: '正在刷新网易云 Cookie…' })
+	refreshSession(state.id).catch(() => console.warn('[漫游同步] 手动刷新网易云 Cookie 失败'))
+	return state
+}
+
+// 刷新 Cookie 并触发漫游同步，合并同时到来的手动和定时刷新
+export function refreshSession(syncId: string | null = null) {
+	if (syncId) refreshSyncId = syncId
+	if (refresh) return refresh
+	refresh = updateSession(async () => {
+		let refreshError: string | null = null
 		try {
+			if (!cookie) {
+				refreshError = '网易云登录已失效，请重新扫码'
+				return
+			}
 			const response = await ncmApi.login_refresh({ ...ncmOptions, cookie })
 			if (response.body.code !== 200) throw response
 			await persistCookie(await validateCookie(mergeCookies(cookie, response.cookie || [])))
 		} catch (error: unknown) {
+			refreshError = readNeteaseSyncError(error)
 			if (isExpiredCookie(error)) await persistCookie('')
-			// 网络或存储故障不清空原 Cookie；失效清空仅在数据库提交成功后发布到内存。
+			// 网络或存储故障不清空原 Cookie；失效清空仅在数据库提交成功后发布到内存
 			throw error
+		} finally {
+			const manualId = refreshSyncId
+			refreshSyncId = null
+			refresh = null
+			// 刷新失败但凭证未失效时仍同步歌曲，最终提示保留刷新失败的结果
+			if (cookie) scheduleRoamingSync(cookie, manualId ? { id: manualId, refreshError } : null)
+			else if (manualId) {
+				publishNeteaseSync({ id: manualId, phase: 'error', message: refreshError || '网易云登录已失效，请重新扫码' })
+			}
 		}
 	})
+	return refresh
 }
 
 // 服务关闭前等待在途登录和刷新操作结束

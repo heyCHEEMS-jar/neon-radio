@@ -36,7 +36,12 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 	}
 
 	return (
-		<Dialog open onOpenChange={open => { if (!open && !pending.current) onClose() }}>
+		<Dialog
+			open
+			onOpenChange={open => {
+				if (!open && !pending.current) onClose()
+			}}
+		>
 			<DialogContent role="alertdialog" showCloseButton={false}>
 				<DialogTitle>退出登录</DialogTitle>
 				<DialogDescription>确定要退出登录吗？退出后需要重新扫码登录电台。</DialogDescription>
@@ -44,7 +49,9 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 					<button
 						type="button"
 						disabled={loggingOut}
-						onClick={() => { if (!pending.current) onClose() }}
+						onClick={() => {
+							if (!pending.current) onClose()
+						}}
 						className="cursor-pointer rounded-md border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						取消

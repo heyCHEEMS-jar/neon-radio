@@ -2,7 +2,9 @@
 
 import { animate, motion, useDragControls, useMotionValue } from 'framer-motion'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { Spinner } from '@/components/ui/spinner'
 import styles from '@/styles/draggable-grid.module.css'
+import TiltedCard from './TiltedCard'
 
 export interface GridItem {
 	image?: { src?: string; srcSet?: string; alt?: string }
@@ -121,7 +123,12 @@ function getViewportBounds(width: number, height: number, perspective: number, t
 	const cosY = Math.cos((tiltY * Math.PI) / 180)
 	const sinY = Math.sin((tiltY * Math.PI) / 180)
 	const bounds: ViewportBounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
-	const corners = [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: height }, { x: 0, y: height }]
+	const corners = [
+		{ x: 0, y: 0 },
+		{ x: width, y: 0 },
+		{ x: width, y: height },
+		{ x: 0, y: height }
+	]
 	for (const point of corners) {
 		const screenX = point.x - width / 2
 		const screenY = point.y - height / 2
@@ -370,14 +377,12 @@ export default function DraggableGrid({
 	return (
 		<div ref={containerRef} aria-busy={active && !imagesReady} onPointerDown={handlePointerDown} style={wrapperStyle}>
 			{active && !imagesReady && (
-				<p role="status" className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-500">
-					正在准备封面…
-				</p>
+				<div className="pointer-events-none absolute inset-0 grid place-items-center text-neutral-500">
+					<Spinner className="size-6" aria-label="正在准备封面" />
+				</div>
 			)}
 			<motion.div
-				transformTemplate={
-					tilt ? (_, transform) => `rotateX(${tiltX}deg) rotateY(${tiltY}deg) ${transform === 'none' ? '' : transform}` : undefined
-				}
+				transformTemplate={tilt ? (_, transform) => `rotateX(${tiltX}deg) rotateY(${tiltY}deg) ${transform === 'none' ? '' : transform}` : undefined}
 				style={{
 					position: 'absolute',
 					inset: 0,
@@ -426,10 +431,6 @@ export default function DraggableGrid({
 									position: 'relative',
 									width: '100%',
 									height: '100%',
-									overflow: 'hidden',
-									borderRadius: radius,
-									boxShadow: tilt ? '0 12px 32px rgba(0,0,0,0.18)' : undefined,
-									backgroundColor: src && !failed ? placeholderColor : getItemColor(index),
 									color: 'rgba(255,255,255,0.85)',
 									display: 'flex',
 									alignItems: 'center',
@@ -441,30 +442,20 @@ export default function DraggableGrid({
 									animationDelay: `${(index % 8) * 50}ms`
 								}}
 							>
-								<span style={{ position: 'relative', zIndex: 0 }}>{index + 1}</span>
-								{src && !failed && (
-									<img
-										src={src}
-										srcSet={item.image?.srcSet}
-										alt={alt}
-										draggable={false}
-										loading="eager"
-										decoding="async"
-										fetchPriority={inViewport ? 'high' : 'low'}
-										onError={() => setFailedImages(current => (current.has(src) ? current : new Set(current).add(src)))}
-										style={{
-											position: 'absolute',
-											inset: 0,
-											width: '100%',
-											height: '100%',
-											objectFit: 'cover',
-											pointerEvents: 'none',
-											userSelect: 'none',
-											display: 'block',
-											zIndex: 1
-										}}
-									/>
-								)}
+								<TiltedCard
+									imageSrc={failed ? undefined : src}
+									srcSet={item.image?.srcSet}
+									altText={alt}
+									radius={radius}
+									smoothness={0}
+									backgroundColor={src && !failed ? placeholderColor : getItemColor(index)}
+									fetchPriority={inViewport ? 'high' : 'low'}
+									onImageError={() => {
+										if (src) setFailedImages(current => (current.has(src) ? current : new Set(current).add(src)))
+									}}
+								>
+									<span style={{ position: 'relative', zIndex: 0 }}>{index + 1}</span>
+								</TiltedCard>
 							</div>
 						</motion.div>
 					)

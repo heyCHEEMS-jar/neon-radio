@@ -1,9 +1,10 @@
 'use client'
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { Compass, LogIn, LogOut, Settings2 } from 'lucide-react'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { RadioLiveContext } from '@/hooks/useRadioLive'
 import type { MenuPosition } from './Radio'
 
 const Login = lazy(() => import('./Login'))
@@ -30,6 +31,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuProps) {
+	const live = useContext(RadioLiveContext)
+	if (!live) throw new Error('电台菜单需要放在电台实时管线内')
+	const { reauthenticate } = live
 	const [dialog, setDialog] = useState<'login' | 'options' | 'logout' | null>(null)
 	const [status, setStatus] = useState<LoginStatus>('checking')
 	const [errorMessage, setErrorMessage] = useState('')
@@ -81,15 +85,17 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 		statusRequest.current?.abort()
 		setStatus('authenticated')
 		setErrorMessage('')
-		setDialog('options')
+		setDialog(null)
+		reauthenticate()
 		toast.success('登录成功')
-	}, [])
+	}, [reauthenticate])
 
 	const handleLogoutSuccess = () => {
 		statusRequest.current?.abort()
 		setStatus('anonymous')
 		setErrorMessage('')
 		setDialog(null)
+		reauthenticate()
 		toast.success('退出登录成功')
 	}
 
@@ -137,7 +143,6 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 				{dialog === 'options' && <Options onClose={() => setDialog(null)} />}
 				{dialog === 'logout' && <Logout onClose={() => setDialog(null)} onSuccess={handleLogoutSuccess} />}
 			</Suspense>
-			<Toaster richColors closeButton />
 		</>
 	)
 }

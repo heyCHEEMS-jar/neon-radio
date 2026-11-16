@@ -1,6 +1,8 @@
 'use client'
 
 import { createContext, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Toaster } from 'sonner'
+import useRadioLive, { RadioLiveContext } from '@/hooks/useRadioLive'
 import type { RoamingProps } from './Roaming'
 
 const Menu = lazy(() => import('./Menu'))
@@ -22,6 +24,7 @@ function LoadError({ open, onClose }: RoamingProps) {
 }
 
 export default function Radio({ children }: { children: ReactNode }) {
+	const live = useRadioLive()
 	const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
 	const [loadGrid, setLoadGrid] = useState(false)
 	// 入场期间保留静止底图，面板覆盖屏幕后再隐藏
@@ -59,7 +62,7 @@ export default function Radio({ children }: { children: ReactNode }) {
 	}, [])
 
 	return (
-		<>
+		<RadioLiveContext.Provider value={live}>
 			<div
 				ref={rootRef}
 				tabIndex={0}
@@ -80,23 +83,18 @@ export default function Radio({ children }: { children: ReactNode }) {
 				</RadioSceneContext.Provider>
 			</div>
 			<Suspense fallback={null}>
-				{menuPosition && (
-					<Menu
-						position={menuPosition}
-						onOpenRoaming={openRoaming}
-						onRestoreFocus={() => rootRef.current?.focus()}
-					/>
-				)}
+				{menuPosition && <Menu position={menuPosition} onOpenRoaming={openRoaming} onRestoreFocus={() => rootRef.current?.focus()} />}
 			</Suspense>
 			<Suspense fallback={null}>
 				{loadGrid && (
 					<Roaming
 						open={roaming}
 						onClose={() => setRoamingPhase('closed')}
-						onEntered={() => setRoamingPhase(phase => phase === 'entering' ? 'open' : phase)}
+						onEntered={() => setRoamingPhase(phase => (phase === 'entering' ? 'open' : phase))}
 					/>
 				)}
 			</Suspense>
-		</>
+			<Toaster richColors closeButton />
+		</RadioLiveContext.Provider>
 	)
 }

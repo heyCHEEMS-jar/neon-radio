@@ -3,7 +3,7 @@
 import { useContext } from 'react'
 import { RadioSceneContext } from '@/components/radio/Radio'
 import { visualizerConfig as config } from '@/config/visualizer'
-import { useVisualizer } from '@/hooks/visualizer/useVisualizer'
+import { useVisualizer } from '@/hooks/useVisualizer'
 
 const edgeClassName =
 	'absolute left-0 block h-[clamp(48px,10svh,96px)] w-full opacity-70 [mask-image:linear-gradient(to_right,transparent,#000_16%,#000_84%,transparent)]'
@@ -12,8 +12,7 @@ const infoClassName =
 	'min-w-0 translate-y-1/2 border-t-[clamp(1px,0.3vw,5px)] border-white/70 pt-[clamp(6px,0.8vw,12px)] text-center text-[clamp(10px,2.4vw,40px)] font-light text-[#e6cbd6] [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]'
 
 // 描边随中心容器宽度缩放，最细保留1px
-const frameClassName =
-	'absolute top-1/2 left-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
+const frameClassName = 'absolute top-1/2 left-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
 
 export default function Visuals() {
 	const active = useContext(RadioSceneContext)

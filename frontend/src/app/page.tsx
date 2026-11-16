@@ -1,5 +1,5 @@
 import Video from '@/components/backgrounds/Video'
-import Visuals from '@/components/visualizer/Visuals'
+import Visuals from '@/components/radio/Visuals'
 import Radio from '@/components/radio/Radio'
 
 export default function HomePage() {

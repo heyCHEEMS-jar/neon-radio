@@ -182,10 +182,7 @@ export function useVisualizer(active = true) {
 							const radius = coverWidth / 2 + config.ring.gap * dpr
 							const maxHeight = Math.max(
 								0,
-								Math.min(
-									config.ring.maxHeight * dpr,
-									2 * (Math.min(ring.width, ring.height) / 2 - radius - (lineWidth + glowStrength))
-								)
+								Math.min(config.ring.maxHeight * dpr, 2 * (Math.min(ring.width, ring.height) / 2 - radius - (lineWidth + glowStrength)))
 							)
 							const count = Math.max(8, Math.min(config.ring.count, Math.floor((2 * Math.PI * radius) / (config.ring.spacing * dpr))))
 							const step = (Math.PI * 2) / count

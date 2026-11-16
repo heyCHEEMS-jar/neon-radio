@@ -10,6 +10,7 @@ import useBrowserAuth from './hooks/useBrowserAuth.js'
 import useRequestPathGuard from './hooks/useRequestPathGuard.js'
 import { hasPendingQr } from './services/qr-code.js'
 import { readBrowserToken, setBrowserToken } from './services/browser-session.js'
+import initRadioLive from './services/radio-live.js'
 
 // 仅为 Windows 终端切换 UTF-8 代码页
 if (process.platform === 'win32' && process.stdout.isTTY) {
@@ -42,22 +43,16 @@ try {
 	await fastify.register(fastifyExpress) // 兼容 express
 	fastify.use('/neon-radio/ncm', await ncmApi.constructServer())
 	await fastify.register(indexRoutes, { prefix: '/neon-radio' })
+	initRadioLive(fastify)
 
 	fastify.listen({ port: config.API_PORT }, (_err, address) => {
 		console.log(`
-██╗  ██╗███████╗ █████╗ ██████╗ ████████╗██╗  ██╗
-██║  ██║██╔════╝██╔══██╗██╔══██╗╚══██╔══╝██║  ██║
-███████║█████╗  ███████║██████╔╝   ██║   ███████║
-██╔══██║██╔══╝  ██╔══██║██╔══██╗   ██║   ██╔══██║
-██║  ██║███████╗██║  ██║██║  ██║   ██║   ██║  ██║
-╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
-                                                 
-██████╗  █████╗ ██████╗ ██╗ ██████╗              
-██╔══██╗██╔══██╗██╔══██╗██║██╔═══██╗             
-██████╔╝███████║██║  ██║██║██║   ██║             
-██╔══██╗██╔══██║██║  ██║██║██║   ██║             
-██║  ██║██║  ██║██████╔╝██║╚██████╔╝             
-╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝
+███╗   ██╗███████╗ ██████╗ ███╗   ██╗    ██████╗  █████╗ ██████╗ ██╗ ██████╗ 
+████╗  ██║██╔════╝██╔═══██╗████╗  ██║    ██╔══██╗██╔══██╗██╔══██╗██║██╔═══██╗
+██╔██╗ ██║█████╗  ██║   ██║██╔██╗ ██║    ██████╔╝███████║██║  ██║██║██║   ██║
+██║╚██╗██║██╔══╝  ██║   ██║██║╚██╗██║    ██╔══██╗██╔══██║██║  ██║██║██║   ██║
+██║ ╚████║███████╗╚██████╔╝██║ ╚████║    ██║  ██║██║  ██║██████╔╝██║╚██████╔╝
+╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝
 ──────────────────────────────────
 ★ 	Status: Online 		★
 ★ 	Port: ${config.API_PORT} 		★
@@ -65,8 +60,8 @@ try {
 ★ 	System: ${process.platform} 		★
 ──────────────────────────────────
 `)
-		console.log(`Neon Radio: ${address}/neon-radio`)
-		console.log(`NCM API: ${address}/neon-radio/ncm`)
+		console.log(`[Neon Radio] ${address}/neon-radio`)
+		console.log(`[NCM API] ${address}/neon-radio/ncm`)
 	})
 } catch (err) {
 	fastify.log.error(err)

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { RowDataPacket } from 'mysql2/promise'
 import config from '../config.js'
-import { pool } from '../utils/db.js'
+import { ensureSecondPrecision, pool } from '../utils/db.js'
 
 export interface BrowserSession {
 	token: string
@@ -17,7 +17,7 @@ function hashToken(token: string) {
 }
 
 // 读取 token Cookie，仅检查格式，不验证登录
-export function readBrowserToken(request: FastifyRequest) {
+export function readBrowserToken(request: { headers: { cookie?: string | undefined } }) {
 	const value = request.headers.cookie
 		?.split(';')
 		.map(item => item.trim())
@@ -39,20 +39,21 @@ export async function initBrowserSessions() {
 		CREATE TABLE IF NOT EXISTS browser_sessions (
 			token_hash BINARY(32) NOT NULL PRIMARY KEY,
 			netease_uid VARCHAR(20) NOT NULL,
-			expires_at DATETIME(3) NOT NULL,
+			expires_at DATETIME NOT NULL,
 			INDEX (netease_uid),
 			INDEX (expires_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 	`)
+	await ensureSecondPrecision('browser_sessions', 'expires_at')
 }
 
 // 登录成功后创建新会话，并撤销当前浏览器的旧 token
 export async function createBrowserSession(previousToken = ''): Promise<BrowserSession> {
-	const session = { token: randomBytes(32).toString('hex'), expiresAt: Date.now() + browserSessionMaxAge * 1000 }
+	const session = { token: randomBytes(32).toString('hex'), expiresAt: (Math.floor(Date.now() / 1000) + browserSessionMaxAge) * 1000 }
 	const connection = await pool.getConnection()
 	try {
 		await connection.beginTransaction()
-		await connection.execute('DELETE FROM browser_sessions WHERE expires_at <= UTC_TIMESTAMP(3) OR token_hash = ?', [
+		await connection.execute('DELETE FROM browser_sessions WHERE expires_at <= UTC_TIMESTAMP() OR token_hash = ?', [
 			previousToken ? hashToken(previousToken) : null
 		])
 		await connection.execute('INSERT INTO browser_sessions (token_hash, netease_uid, expires_at) VALUES (?, ?, ?)', [
@@ -74,7 +75,7 @@ export async function createBrowserSession(previousToken = ''): Promise<BrowserS
 export async function hasBrowserSession(token: string) {
 	if (!token) return false
 	const [rows] = await pool.execute<RowDataPacket[]>(
-		'SELECT 1 FROM browser_sessions WHERE token_hash = ? AND netease_uid = ? AND expires_at > UTC_TIMESTAMP(3) LIMIT 1',
+		'SELECT 1 FROM browser_sessions WHERE token_hash = ? AND netease_uid = ? AND expires_at > UTC_TIMESTAMP() LIMIT 1',
 		[hashToken(token), config.NETEASE_UID]
 	)
 	return rows.length > 0

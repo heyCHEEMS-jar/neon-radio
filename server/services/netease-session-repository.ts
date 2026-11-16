@@ -1,5 +1,5 @@
 import type { RowDataPacket } from 'mysql2/promise'
-import { ensureDatabase, pool } from '../utils/db.js'
+import { ensureDatabase, ensureSecondPrecision, pool } from '../utils/db.js'
 
 interface NeteaseSessionRow extends RowDataPacket {
 	cookieEnvelope: Buffer
@@ -16,9 +16,10 @@ async function createSessionTable() {
 		CREATE TABLE IF NOT EXISTS netease_sessions (
 			netease_uid VARCHAR(20) NOT NULL PRIMARY KEY,
 			cookie_envelope MEDIUMBLOB NOT NULL,
-			updated_at DATETIME(3) NOT NULL
+			updated_at DATETIME NOT NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 	`)
+	await ensureSecondPrecision('netease_sessions', 'updated_at')
 }
 
 function isMissingDatabaseError(error: unknown) {

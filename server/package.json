@@ -21,11 +21,13 @@
 		"qrcode": "^1.5.4",
 		"safe-decode-uri-component": "^1.2.1",
 		"tunnel": "^0.0.6",
+		"ws": "^8.22.2",
 		"xml2js": "^0.6.2"
 	},
 	"devDependencies": {
 		"@types/express": "^5.0.6",
 		"@types/node": "^24.19.2",
+		"@types/ws": "^8.18.2",
 		"typescript": "^5.9.3"
 	}
 }

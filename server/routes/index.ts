@@ -4,6 +4,8 @@ import { closeDatabase } from '../utils/db.js'
 import { ApiError, isRecord } from '../utils/ncm.js'
 import { initSession, refreshSession, waitForSessionUpdates } from '../services/netease-session.js'
 import { clearQrCache } from '../services/qr-code.js'
+import { initRoamingSongRepository } from '../services/roaming-song-repository.js'
+import { waitForRoamingSync } from '../services/roaming-sync.js'
 import playlistRoutes from './playlists.js'
 import sessionRoutes from './session.js'
 import radioOptionsRoutes from './radio-options.js'
@@ -18,6 +20,7 @@ const errorMessages: Record<number, string> = {
 
 export default async function indexRoutes(fastify: FastifyInstance) {
 	await initSession()
+	await initRoamingSongRepository()
 	fastify.addHook('onRequest', async (_request, reply) => {
 		reply.header('Cache-Control', 'private, no-store')
 	})
@@ -48,6 +51,7 @@ export default async function indexRoutes(fastify: FastifyInstance) {
 		clearInterval(timer)
 		clearQrCache()
 		await waitForSessionUpdates()
+		await waitForRoamingSync()
 		await closeDatabase()
 	})
 }

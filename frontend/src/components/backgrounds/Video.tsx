@@ -16,17 +16,21 @@ export default function Video() {
 	}, [active])
 
 	return (
-		<video
-			ref={videoRef}
-			className="pointer-events-none fixed inset-0 z-0 block h-svh w-full bg-black object-cover object-center"
-			autoPlay
-			loop
-			muted
-			playsInline
-			preload="auto"
-			aria-hidden="true"
-		>
-			<source src="/videos/loop.webm" type="video/webm" />
-		</video>
+		<>
+			<link rel="preload" as="image" href="/images/thumb.webp" fetchPriority="high" />
+			<video
+				ref={videoRef}
+				className="pointer-events-none fixed inset-0 z-0 block h-svh w-full bg-black object-cover object-center"
+				poster="/images/thumb.webp"
+				autoPlay
+				loop
+				muted
+				playsInline
+				preload="auto"
+				aria-hidden="true"
+			>
+				<source src="/videos/loop.webm" type="video/webm" />
+			</video>
+		</>
 	)
 }
