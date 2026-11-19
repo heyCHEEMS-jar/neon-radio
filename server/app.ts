@@ -45,7 +45,7 @@ try {
 	await initSession()
 	await initSettings()
 
-	// 音频黑盒只依赖业务层注入的取链函数
+	// 音频层只依赖业务层注入的取链函数
 	setSourceResolver(resolveAudioSrc)
 	songsEvents.on('change', queueAnalysis)
 	initRadioPlayback()

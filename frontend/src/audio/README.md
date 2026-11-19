@@ -1,4 +1,4 @@
-# 前端音频黑盒
+# 前端音频层
 
 外部只允许从 `index.ts` 导入 `useRadioAudio`、`useVisualizer`、`RadioAudioContext`。
 

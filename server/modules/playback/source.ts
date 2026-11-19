@@ -52,7 +52,7 @@ export async function getRadioAudio(song: { id: string; durationMs: number }): P
 	return request
 }
 
-// 音频黑盒只需要地址，不接触会话和缓存细节
+// 音频层只需要地址，不接触会话和缓存细节
 export async function resolveAudioSrc(song: { id: string; durationMs: number }) {
 	return (await getRadioAudio(song)).src
 }

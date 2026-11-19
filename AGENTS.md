@@ -19,12 +19,12 @@
 - 跨端类型、运行时 schema、WS 消息只在 `packages/protocol` 定义，前后端不得各写一份。
 - `server/modules/<domain>/store.ts` 是唯一允许写该领域 SQL 的地方。
 
-## 音频黑盒铁律
+## 音频层铁律
 
 - 震动只能由服务端已入库的时间轴驱动。**禁止**为“看起来有反馈”加入实时频谱兜底。
 - 试听裁切音频不得使用完整曲目的时间轴。
 - `AUDIO_ANALYSIS_VERSION` 变更等于全量重算，必须说明影响。
-- 黑盒外的代码不得出现 ffmpeg、Worker、PCM、Essentia、AnalyserNode、频谱采样。
+- 音频层以外的代码不得出现 ffmpeg、Worker、PCM、Essentia、AnalyserNode、频谱采样。
 
 ## 前端约定
 

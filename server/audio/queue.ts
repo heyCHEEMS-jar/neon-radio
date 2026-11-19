@@ -24,7 +24,7 @@ let pendingChecks = Promise.resolve()
 let currentSongIds: Set<string> | null = null
 let closing = false
 
-// 取链由业务层注入，黑盒内部不感知会话和权限
+// 取链由业务层注入，音频层内部不感知会话和权限
 export function setSourceResolver(resolver: AudioSourceResolver) {
 	resolveSrc = resolver
 }

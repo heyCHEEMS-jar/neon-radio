@@ -6,14 +6,21 @@
 
 <div align="center">
   <h1>Neon Radio</h1>
-  <p>A personal radio for one fixed NetEase Cloud Music account: main playback, guest roaming, playlist sync, and audio-driven visuals.</p>
+  <p>A personal web radio for one fixed NetEase Cloud Music account: shared playback, guest roaming, playlist sync, and audio-driven visuals.</p>
+  <p>
+    <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
+    <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+    <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+    <img src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
+    <img src="https://img.shields.io/badge/WebSocket-live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
+    <img src="https://img.shields.io/badge/MySQL-database-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+    <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
+    <img src="https://img.shields.io/badge/pnpm-workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
+    <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
+    <img src="https://img.shields.io/badge/License-ISC-blue?style=flat-square" alt="License ISC" />
+  </p>
 </div>
-
-## Overview
-
-Neon Radio keeps a single NetEase account online and exposes it as a web radio. Listeners share one server-side playback clock. An administrator can sign in with a QR code, manage playback, sync playlists, and optionally let guests roam without affecting the main station.
-
-Onset timelines are analysed offline on the server and stored in MySQL. The browser only triggers visual impacts from that stored timeline; it never fakes beats from a live spectrum.
 
 ## Getting started
 
@@ -24,24 +31,28 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill in `NETEASE_UID`, `NETEASE_COOKIE_ENCRYPTION_KEY` (Base64 of 32 random bytes), and the `DB_*` variables, then run:
+Fill in `NETEASE_UID` (the number after `id=` in your profile URL), `NETEASE_COOKIE_ENCRYPTION_KEY` (Base64 of 32 random bytes), and the `DB_*` variables, then run:
 
 ```bash
 pnpm dev
 ```
 
-Open <http://localhost:3003>, right-click (or long-press on mobile), and scan the QR code with the configured account. Playlists and audio timelines sync in the background after login.
+- Frontend: <http://localhost:3003>
+- API: <http://localhost:4003/neon-radio>
+
+Right-click (or long-press on mobile) and scan the QR code. After login the server syncs playlists in the background and fills in lyrics, chorus ranges, and audio timelines.
 
 Other scripts: `pnpm typecheck`, `pnpm build`, `pnpm start` (production, PM2), `pnpm clean`.
 
 ## Features
 
-- Shared main playback clock with server-side song selection.
-- Guest roaming with per-connection local playback.
-- Optional forced sync of an administrator's playback to the main station.
-- Full playlist sync for the fixed account, deduplicated and replaced transactionally.
-- QR login, encrypted cookie storage, scheduled refresh, and automatic invalidation.
-- Animated visuals: video background, cover motion, spectrum ring and edges, timeline-driven impacts.
+- **Shared main playback**: one server-side clock; every listener hears the same song at the same position.
+- **Guest roaming**: admins can let guests pick songs, seek, and skip without touching the main station.
+- **Forced sync**: an admin can push their own playback state to the main station.
+- **Playlist roaming**: syncs every playlist of the account, fetches only missing details, then replaces the list transactionally and deduplicates by song and artist. Lyrics, chorus ranges, and timelines of removed songs are cleaned up.
+- **Lyrics and chorus**: fetched on demand and cached in MySQL; chorus ranges trigger the light-pillar visuals.
+- **Listener count**: bottom-left shows online listeners; hover reveals the top 10 songs by listener count.
+- **QR login**: encrypted cookie storage, scheduled refresh, and re-login after invalidation.
 
 ## How it works
 
@@ -52,55 +63,47 @@ Browser
 Next.js (3003)
   ▼
 Fastify (4003)
-  ├─ modules/*        session, roaming, playback, settings
-  ├─ audio/           download → ffmpeg → worker analysis → timeline
+  ├─ modules/*        session, roaming, playback, lyrics, chorus, settings
+  ├─ audio/*          download → ffmpeg → worker analysis → timeline
   ├─ platform/*       MySQL, NetEase adapters, cookies, crypto
-  ├─ vendor/ncm-api   local NetEase API module (read-only)
+  ├─ vendor/ncm-api   vendored NetEase API (read-only)
   └─ MySQL
 ```
 
-The server creates the database, runs migrations, and restores the saved session on startup.
+The server creates the database, runs migrations, and restores the saved session on startup. Onset timelines are analysed offline on the server; the browser only triggers impacts from those stored timelines and never fakes beats from a live spectrum.
 
 ## Stack
 
-| Layer | Libraries |
+| Layer | Main dependencies |
 | --- | --- |
 | Frontend | Next.js 16 (Turbopack), React 19, TypeScript |
-| UI and styling | Tailwind CSS 4, shadcn/ui structure, Radix UI, Lucide, clsx, tailwind-merge, Sonner |
-| Motion and visuals | Framer Motion, GSAP (BlurText), Web Animations API, Canvas 2D, Web Audio API |
-| WebGPU | vgpu (vercel-labs), AeroShards shaders |
-| Server | Fastify 5, @fastify/cookie, @fastify/express, @fastify/rate-limit, cookie, set-cookie-parser |
-| Realtime | WebSocket (`ws`) |
-| Database | MySQL, mysql2, Drizzle ORM, drizzle-kit |
+| Styling and UI | Tailwind CSS 4, Radix UI, shadcn/ui structure, Lucide, clsx, tailwind-merge, Sonner |
+| Motion and visuals | Framer Motion, GSAP, Canvas 2D, Web Audio API, WebGL2 |
+| Server | Fastify 5, @fastify/cookie, @fastify/express, @fastify/rate-limit, `ws` |
+| Data | MySQL, mysql2, Drizzle ORM, drizzle-kit |
 | Audio analysis | ffmpeg-static, Essentia.js, Worker Threads, execa |
-| NetEase API | NeteaseCloudMusicApiEnhanced (`@NeteaseCloudMusicApiEnhanced/api-enhanced`, vendored as `@neteasecloudmusicapienhanced/api` v4.41.1), `@neteasecloudmusicapienhanced/unblockmusic-utils` |
+| NetEase API | NeteaseCloudMusicApiEnhanced, `@neteasecloudmusicapienhanced/unblockmusic-utils` |
 | Contracts | `@neon-radio/protocol` (workspace), zod |
-| Build and tooling | TypeScript (frontend 6.x / server 5.x), PostCSS, Tailwind PostCSS, Drizzle Kit |
-| Launch | pnpm, tsx, concurrently, PM2 |
+| Tooling | pnpm, tsx, concurrently, PM2, PostCSS |
 
-The vendored ncm-api also depends on axios, crypto-js, node-forge, jsdom, qrcode, xml2js, fzstd, music-metadata, express, express-fileupload, pac-proxy-agent, tunnel, and safe-decode-uri-component.
+The vendored ncm-api also pulls in axios, crypto-js, node-forge, jsdom, qrcode, xml2js, and others; business code does not use them directly.
 
 ## Project structure
 
 ```text
 neon-radio/
-├─ packages/protocol/   shared types and validation
-├─ frontend/src/audio/  audio black box (playback, spectrum, impacts)
-├─ frontend/src/features/radio/   UI and live connection
-├─ server/modules/      session, roaming, playback, settings
-├─ server/audio/        audio black box (download, decode, analyse, timeline)
-├─ server/platform/     DB, HTTP, crypto, NetEase adapters
-└─ server/vendor/ncm-api/   third-party, read-only
+├─ packages/protocol/           shared types and validation
+├─ frontend/src/audio/          audio layer (playback, spectrum, impacts)
+├─ frontend/src/features/radio/ radio UI and live connection
+├─ server/modules/              business modules
+├─ server/audio/                audio layer (download, decode, analyse)
+├─ server/platform/             DB, HTTP, crypto, NetEase adapters
+└─ server/vendor/ncm-api/       third-party, read-only
 ```
 
-Entry layers (`routes` / `live`) only validate and forward; business modules never write SQL; the platform layer owns the database and third-party adapters. Dependencies point downward only, and each audio black box is used through its `index.ts`.
+Entry layers (`routes` / `live`) only validate and forward; business modules never write SQL; the platform layer owns the database and third-party adapters. Dependencies point downward only, and the audio layer is used only through its `index.ts`.
 
-## Credits and third-party assets
+## Third-party assets
 
-- **NetEase API**: NeteaseCloudMusicApiEnhanced (`@NeteaseCloudMusicApiEnhanced/api-enhanced`, vendored as `@neteasecloudmusicapienhanced/api` v4.41.1) and `@neteasecloudmusicapienhanced/unblockmusic-utils`. Use it for personal radio only and respect the NetEase Cloud Music terms of service.
-- **Text animation**: `BlurText` comes from React Bytes.
-- **UI components**: `DraggableGrid` and `TiltedCard` come from Originkit, located in `frontend/src/components/vendor/originkit`.
-- **WebGPU visuals**: The `AeroShards` scene is built on [vgpu](https://github.com/vercel-labs/vgpu) with the shader provided by the project author.
-- **Background video**: **"Synth City by Visualdon - 4K 60fps"** by **VISUALDON**, sourced from Wallpaper Engine. The video remains the property of its author; the copy in `frontend/public/videos/loop.webm` is for demonstration only. Obtain permission or replace it before public distribution or commercial use.
-- **Icons and primitives**: Lucide, Radix UI, shadcn/ui.
-
+- **NetEase API**: [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced), vendored as `@neteasecloudmusicapienhanced/api` v4.41.1. Use it for personal radio only and respect the NetEase Cloud Music terms of service.
+- **Background video**: **"Synth City by Visualdon - 4K 60fps"** by **VISUALDON**, sourced from Wallpaper Engine. The video remains the property of its author; `frontend/public/videos/loop.webm` is for demonstration only. Obtain permission or replace it before public distribution or commercial use.
