@@ -17,9 +17,12 @@ const requestedTool = process.env.PACKAGE_TOOL || 'pnpm'
 const packageTool = ['pnpm', 'npm', 'yarn'].includes(requestedTool) ? requestedTool : 'pnpm'
 if (packageTool !== requestedTool) console.warn(`未知的包管理器 ${requestedTool}，已回退到 pnpm`)
 
-// 各包管理器的目录参数不同，API 进程通过 server 的 start 脚本启动
+// 构建仍走包管理器；PM2 直接跑 node 入口，避免 spawn .cmd 在 Windows 抛 EINVAL
 const packageBinary = process.platform === 'win32' ? `${packageTool}.cmd` : packageTool
-const serverArgs = packageTool === 'npm' ? ['--prefix', 'server', 'run', 'start'] : packageTool === 'yarn' ? ['--cwd', 'server', 'start'] : ['--dir', 'server', 'start']
+const ROOT = path.join(ROOT_DIR, '..')
+const serverEntry = path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+const serverArg = path.join(ROOT, 'server', 'app.ts')
+const webEntry = path.join(FRONTEND_DIR, 'node_modules', 'next', 'dist', 'bin', 'next')
 
 // 生产构建失败时直接退出，不启动旧产物
 const build = spawnSync(packageBinary, ['run', 'build'], { stdio: 'inherit', shell: true, cwd: FRONTEND_DIR, env: { ...process.env, NODE_ENV: 'production' } })
@@ -40,9 +43,9 @@ pm2.connect(error => {
 	pm2.start(
 		[
 			{
-				script: packageBinary,
-				args: serverArgs,
-				interpreter: 'none',
+				script: serverEntry,
+				args: [serverArg],
+				interpreter: 'node',
 				cwd: path.join(ROOT_DIR, '..'),
 				name: 'neon-radio-api',
 				env: { ...process.env, NODE_ENV: 'production' },
@@ -51,9 +54,9 @@ pm2.connect(error => {
 				merge_logs: true
 			},
 			{
-				script: packageTool,
+				script: webEntry,
 				args: ['start'],
-				interpreter: 'none',
+				interpreter: 'node',
 				cwd: FRONTEND_DIR,
 				name: 'neon-radio-web',
 				env: { ...process.env, NODE_ENV: 'production', PORT: process.env.WEB_PORT || '3003' },
@@ -63,13 +66,20 @@ pm2.connect(error => {
 			}
 		],
 		startError => {
-			if (startError) console.error('PM2 进程启动失败:', startError)
-			else {
-				console.log('\nNext.js 与 API 服务已由 PM2 启动。\n')
-				spawnSync('pm2', ['list'], { stdio: 'inherit', shell: true })
+			if (startError) {
+				console.error('PM2 进程启动失败:', startError)
+				pm2.disconnect()
+				process.exit(1)
 			}
-			pm2.disconnect()
-			process.exit(startError ? 1 : 0)
+			// start 回调只代表指令已下发，再查一次真实状态，避免启动失败仍报成功
+			pm2.list((listError, list) => {
+				if (listError) console.error('PM2 状态查询失败:', listError)
+				spawnSync('pm2', ['list'], { stdio: 'inherit', shell: true })
+				const failed = (list || []).filter(item => item.pm2_env?.status !== 'online')
+				if (failed.length) console.error('\n以下进程未能进入 online 状态:', failed.map(item => item.name).join(', '), '\n请查看 logs/ 下的错误日志。')
+				pm2.disconnect()
+				process.exit(failed.length || listError ? 1 : 0)
+			})
 		}
 	)
 })
