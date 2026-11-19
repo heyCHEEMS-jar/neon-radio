@@ -20,7 +20,6 @@ if (packageTool !== requestedTool) console.warn(`未知的包管理器 ${request
 // 构建仍走包管理器；PM2 直接跑 node 入口，避免 spawn .cmd 在 Windows 抛 EINVAL
 const packageBinary = process.platform === 'win32' ? `${packageTool}.cmd` : packageTool
 const ROOT = path.join(ROOT_DIR, '..')
-const serverEntry = path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const serverArg = path.join(ROOT, 'server', 'app.ts')
 const webEntry = path.join(FRONTEND_DIR, 'node_modules', 'next', 'dist', 'bin', 'next')
 
@@ -43,8 +42,9 @@ pm2.connect(error => {
 	pm2.start(
 		[
 			{
-				script: serverEntry,
-				args: [serverArg],
+				script: serverArg,
+				// 进程内装载 TS，避免 tsx CLI 再 spawn 子进程（那会弹出控制台窗口）
+				node_args: ['--import', 'tsx'],
 				interpreter: 'node',
 				cwd: path.join(ROOT_DIR, '..'),
 				name: 'neon-radio-api',
@@ -71,7 +71,6 @@ pm2.connect(error => {
 				pm2.disconnect()
 				process.exit(1)
 			}
-			// start 回调只代表指令已下发，再查一次真实状态，避免启动失败仍报成功
 			pm2.list((listError, list) => {
 				if (listError) console.error('PM2 状态查询失败:', listError)
 				spawnSync('pm2', ['list'], { stdio: 'inherit', shell: true })
