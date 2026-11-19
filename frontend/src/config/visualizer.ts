@@ -16,12 +16,12 @@ export const visualizerConfig = {
 		maxDecibels: -10 // 旁路采样不再经过音量衰减，留出强音余量，避免频谱整片顶满
 	},
 	shake: {
-		noiseFloor: 0.015,
-		baselineSeconds: 0.5,
-		cooldownSeconds: 0.5,
+		mediumStrength: 0.5,
+		highStrength: 0.65, // 相对该曲最高冲击强度的比例，仅用于动画分档
 		levels: {
-			medium: { minOnset: 0.75, offset: 8, scale: 0.012, centerScale: 0.04, centerRecoil: 0.012, duration: 100 },
-			high: { minOnset: 1.1, offset: 20, scale: 0.025, centerScale: 0.08, centerRecoil: 0.025, duration: 120 }
+			low: { offset: 2, scale: 0.003, centerScale: 0.012, centerRecoil: 0.004, duration: 220 },
+			medium: { offset: 5, scale: 0.012, centerScale: 0.04, centerRecoil: 0.012, duration: 320 },
+			high: { offset: 12, scale: 0.025, centerScale: 0.08, centerRecoil: 0.025, duration: 440 }
 		}
 	},
 	ring: {

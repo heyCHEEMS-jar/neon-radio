@@ -42,11 +42,16 @@ export interface RadioLiveState {
 	authenticated: boolean
 	playback: PlaybackState | null
 	playbackPending: boolean
+	impactsRevision: number
 	neteaseSync: NeteaseSyncState | null
 	syncPending: boolean
 	successfulSyncId: string | null
+	localPlaybackOrder: PlaybackOrder // 浏览器自己的游客漫游偏好，不读取或修改电台播放顺序
+	setLocalPlaybackOrder: (order: PlaybackOrder) => void
 	playSong: (songId: string) => Promise<boolean>
-	playNext: () => Promise<boolean>
+	hasPrevious: boolean
+	playPrevious: () => Promise<boolean>
+	playNext: (manual?: boolean) => Promise<boolean>
 	pause: () => Promise<boolean>
 	returnToMain: () => Promise<boolean>
 	seek: (positionMs: number) => Promise<boolean>
@@ -56,9 +61,17 @@ export interface RadioLiveState {
 	reauthenticate: () => void
 }
 
+interface PlaybackHistory {
+	songIds: string[] // 所有播放模式共用去重后的歌曲历史
+	cur: number // 当前歌曲在历史中的位置，-1 为尚未开始播放
+}
+
+type HistoryAction = 'append' | number // append 为去重追加，数字为回退到已有历史位置
+
 interface PendingPlayback {
 	mode: PlaybackState['mode']
 	restoring: boolean
+	historyAction?: HistoryAction // 只在成功确认后更新历史，不随 WS 指令上传
 	timer: ReturnType<typeof setTimeout>
 	resolve: (success: boolean) => void
 }
@@ -72,6 +85,7 @@ type PlaybackRequest =
 	| { type: 'main-sync-request'; mode: 'main'; playback: { songId: string; positionMs: number } | null }
 
 export const RadioLiveContext = createContext<RadioLiveState | null>(null)
+const localPlaybackOrderKey = 'neon-radio-local-playback-order'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -164,12 +178,15 @@ export function getPlaybackPosition(playback: PlaybackState, now = Date.now()) {
 // 页面共用一条实时连接，弹窗关闭后仍接收播放和手动同步状态
 export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<HTMLAudioElement | null>): RadioLiveState {
 	const [options, setOptions] = useState<RadioOptions | null>(null) // 服务端电台开关
+	const [localPlaybackOrder, updateLocalPlaybackOrder] = useState<PlaybackOrder>('single') // 游客本地默认单曲循环
 	const [authenticated, setAuthenticated] = useState(false) // 当前浏览器是否为已登录管理员
 	const [songs, setSongs] = useState<RadioSong[] | null>(null) // 漫游界面正在展示的歌曲列表
 	const [status, setStatus] = useState<RadioLiveState['status']>('loading') // 实时连接是否就绪
 	const [connectionKey, setConnectionKey] = useState(0) // 主动重连时更新，重建同一条实时管线
 	const [playback, setPlayback] = useState<PlaybackState | null>(null) // 已确认的歌曲、播放模式和进度
+	const [history, setHistory] = useState<PlaybackHistory>({ songIds: [], cur: -1 }) // 本页播放历史，不随模式切换或重连清空
 	const [playbackPending, setPlaybackPending] = useState(false) // 是否有尚未确认的播放操作
+	const [impactsRevision, setImpactsRevision] = useState(0) // 当前歌曲的分析完成后重新拉取时间轴
 	const [neteaseSync, setNeteaseSync] = useState<NeteaseSyncState | null>(null) // 网易云数据刷新任务的状态
 	const [syncPending, setSyncPending] = useState(false) // 网易云刷新请求是否尚未确认
 	const [successfulSyncId, setSuccessfulSyncId] = useState<string | null>(null) // 最近成功的数据刷新任务
@@ -177,12 +194,33 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 	const roamingOpenRef = useRef(roamingOpen) // 让消息回调读取当前漫游开关
 	const socketRef = useRef<WebSocket | null>(null) // 页面唯一的实时连接
 	const playbackRef = useRef<PlaybackState | null>(null) // 异步回调读取最新已确认播放状态
+	const historyRef = useRef(history) // 同一份历史供 WS 回调和连续切歌读取，避免重建连接
 	const playbackRequestsRef = useRef(new Map<string, PendingPlayback>()) // 按请求 ID 保存等待确认的播放操作
 	const deferredMainRef = useRef<PlaybackState | null>(null) // 操作未确认时暂存主线快照，避免覆盖本地操作
 	const awaitingMainRef = useRef(false) // 主线操作已受理，等待最终广播；重连不再恢复旧本地歌曲
 	const pendingRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null) // 正在等待受理的网易云刷新请求
 	const noticeRef = useRef<Pick<NeteaseSyncState, 'id' | 'phase'> | null>(null) // 已提示的刷新任务阶段，避免重复 toast
 	const authChannelRef = useRef<BroadcastChannel | null>(null) // 通知其他标签页更新登录会话
+
+	// 挂载后读取本地偏好，存储不可用或旧值无效时保留单曲循环
+	useEffect(() => {
+		try {
+			const order = localStorage.getItem(localPlaybackOrderKey)
+			if (isPlaybackOrder(order)) updateLocalPlaybackOrder(order)
+		} catch {
+			// 浏览器禁用存储时仍可使用当前页面的播放偏好
+		}
+	}, [])
+
+	// 只更新当前页面与浏览器存储，不向服务端提交电台配置
+	const setLocalPlaybackOrder = useCallback((order: PlaybackOrder) => {
+		updateLocalPlaybackOrder(order)
+		try {
+			localStorage.setItem(localPlaybackOrderKey, order)
+		} catch {
+			toast.warning('无法保存本地播放偏好', { description: '当前页面仍生效，刷新后将恢复单曲循环。' })
+		}
+	}, [])
 
 	// 有真实音频时读取实际位置，重连和管理员推送不再使用估算进度
 	const getCurrentPlayback = useCallback(() => {
@@ -248,16 +286,47 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		authChannelRef.current?.postMessage('changed')
 	}, [resetSession])
 
-	// 应用权威播放状态，仅在播放实例或模式变化时打印日志
-	const applyPlayback = useCallback((next: PlaybackState) => {
+	// 新播放先按歌曲 ID 去重再追加；回退历史只移动 cur，不改变数组顺序
+	const updateHistory = useCallback((songId: string, action: HistoryAction = 'append') => {
+		const current = historyRef.current
+		let next: PlaybackHistory
+		if (typeof action === 'number') {
+			if (current.songIds[action] !== songId) return
+			next = { songIds: current.songIds, cur: action }
+		} else {
+			const songIds = [...current.songIds.filter(id => id !== songId), songId]
+			next = { songIds, cur: songIds.length - 1 }
+		}
+		historyRef.current = next
+		setHistory(next)
+	}, [])
+
+	// 首次真正播放时记录当前歌，未点击播放前的主线快照不算播放历史
+	useEffect(() => {
+		const audio = audioRef.current
+		if (!audio) return
+		const onPlaying = () => {
+			const current = playbackRef.current
+			if (historyRef.current.cur < 0 && current?.song && audio.dataset.playbackId === current.playbackId) updateHistory(current.song.id)
+		}
+		audio.addEventListener('playing', onPlaying)
+		return () => audio.removeEventListener('playing', onPlaying)
+	}, [audioRef, updateHistory])
+
+	// 应用确认的播放状态，再更新共用历史；重连、拖动和同歌曲快照不重复追加
+	const applyPlayback = useCallback((next: PlaybackState, historyAction?: HistoryAction) => {
+		const previous = playbackRef.current
 		awaitingMainRef.current = false
 		playbackRef.current = next
 		setPlayback(next)
-	}, [])
+		if (historyRef.current.cur >= 0 && next.song && (historyAction !== undefined || previous?.song?.id !== next.song.id)) {
+			updateHistory(next.song.id, historyAction)
+		}
+	}, [updateHistory])
 
 	// 每次操作立即发送，按请求 ID 独立确认；true 为已受理，false 为未受理
 	const startPlaybackRequest = useCallback(
-		(socket: WebSocket, request: PlaybackRequest, restoring = false) => {
+		(socket: WebSocket, request: PlaybackRequest, { restoring = false, historyAction }: { restoring?: boolean; historyAction?: HistoryAction } = {}) => {
 			if (!playbackRequestsRef.current.size) deferredMainRef.current = null
 			const requestId = crypto.randomUUID()
 			let resolveRequest: (success: boolean) => void = () => {}
@@ -271,7 +340,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				if (!restoring) toast.warning('播放请求未确认', { description: '保持原来的播放状态，重连后可再次尝试。' })
 				socket.close()
 			}, 15_000)
-			playbackRequestsRef.current.set(requestId, { mode: request.mode, restoring, timer, resolve: resolveRequest })
+			playbackRequestsRef.current.set(requestId, { mode: request.mode, restoring, historyAction, timer, resolve: resolveRequest })
 			setPlaybackPending(true)
 			try {
 				socket.send(JSON.stringify({ requestId, ...request }))
@@ -345,10 +414,11 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 			socketRef.current = current
 
 			current.onopen = () => {
+				if (stopped || socketRef.current !== current) return
+				// 重连补拉时间轴，避免错过断线期间的分析完成通知
+				setImpactsRevision(value => value + 1)
 				const previous = getCurrentPlayback() // 断线恢复使用真实歌曲位置和暂停状态
 				if (
-					stopped ||
-					socketRef.current !== current ||
 					awaitingMainRef.current ||
 					previous?.mode !== 'local' ||
 					!previous.song ||
@@ -366,7 +436,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						positionMs: getPlaybackPosition(previous),
 						paused: previous.paused
 					},
-					true
+					{ restoring: true }
 				)
 			}
 			current.onmessage = event => {
@@ -387,6 +457,9 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						const firstSnapshot = latestSongsRef.current === null
 						latestSongsRef.current = songs
 						if (!roamingOpenRef.current || firstSnapshot) setSongs(songs)
+					} else if (message.type === 'radio-impacts-ready') {
+						if (typeof message.data !== 'string') throw new Error('音频分析消息异常')
+						if (message.data === playbackRef.current?.song?.id) setImpactsRevision(value => value + 1)
 					} else if (message.type === 'playback-state') {
 						const next = readPlayback(message.data)
 						if (next.mode !== 'main') throw new Error('主线播放消息异常')
@@ -439,7 +512,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						const next = readPlayback(message.data)
 						if (next.mode !== pending.mode) throw new Error('播放模式确认异常')
 						deferredMainRef.current = null
-						applyPlayback(next)
+						applyPlayback(next, pending.historyAction)
 						finishPlaybackRequest(message.requestId, true)
 					} else if (message.type === 'netease-sync') {
 						if (typeof message.snapshot !== 'boolean') throw new Error('网易云同步消息异常')
@@ -511,14 +584,61 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		},
 		[startPlaybackRequest]
 	)
-	// 本地曲目结束后申请下一首，选择规则和播放实例都由服务端确认
-	const playNext = useCallback(() => {
-		const current = playbackRef.current // 续播只针对当前本地实例
+	// 前后切歌共用私有播放请求，成功后更新历史；true 为已确认，false 为未受理
+	const requestLocalSong = useCallback((songId: string, historyAction: HistoryAction) => {
 		const socket = socketRef.current
-		if (current?.mode !== 'local' || !current.playbackId || !socket || socket.readyState !== WebSocket.OPEN || playbackRequestsRef.current.size)
+		if (status !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN || playbackRequestsRef.current.size) return Promise.resolve(false)
+		if (!authenticated && !options?.guestRoamingEnabled) return Promise.resolve(false)
+		if (!latestSongsRef.current?.some(song => song.id === songId && Number.isFinite(song.duration) && song.duration > 0)) return Promise.resolve(false)
+
+		// 携带新本地实例，只切当前听众，不触发管理员强制同步到主线
+		return startPlaybackRequest(socket, {
+			type: 'playback-request',
+			mode: 'local',
+			songId,
+			playbackId: crypto.randomUUID(),
+			positionMs: 0,
+			paused: false
+		}, { historyAction })
+	}, [authenticated, options?.guestRoamingEnabled, startPlaybackRequest, status])
+
+	// 上一首确认后只移动 cur，不重新追加旧歌；true 为已确认，false 为无上一首或未受理
+	const playPrevious = useCallback(() => {
+		const current = historyRef.current
+		const songId = current.songIds[current.cur - 1]
+		if (!songId) return Promise.resolve(false)
+		return requestLocalSong(songId, current.cur - 1)
+	}, [requestLocalSong])
+
+	// 自动续播遵循单曲循环，手动下一首重新选歌而不前进历史；true 为已确认，false 为未受理
+	const playNext = useCallback((manual = false) => {
+		const current = playbackRef.current
+		const socket = socketRef.current
+		if (!current?.song || !current.playbackId || !socket || socket.readyState !== WebSocket.OPEN || playbackRequestsRef.current.size)
 			return Promise.resolve(false)
-		return startPlaybackRequest(socket, { type: 'playback-next-request', mode: 'local', playbackId: current.playbackId })
-	}, [startPlaybackRequest])
+		if (!manual && current.mode !== 'local') return Promise.resolve(false)
+
+		// 下一首按最新歌单选择，不使用漫游界面快照或历史中 cur 后面的歌曲
+		const available = latestSongsRef.current?.filter(song => Number.isFinite(song.duration) && song.duration > 0) ?? []
+		if (manual || (!authenticated && options?.guestRoamingEnabled && available.length)) {
+			if (!available.length) return Promise.resolve(false)
+			const order = authenticated ? options?.playbackOrder ?? 'random' : localPlaybackOrder
+			const index = available.findIndex(song => song.id === current.song?.id)
+			let next = available[(index + 1) % available.length] // 顺序从末尾回到第一首，单首自然循环
+			if (!manual && order === 'single' && index >= 0) next = available[index]
+			else if (order === 'random') {
+				const candidates = available.length > 1 ? available.filter(song => song.id !== current.song?.id) : available
+				next = candidates[Math.floor(Math.random() * candidates.length)]
+			}
+			if (!next) return Promise.resolve(false)
+
+			// 确认选中的歌曲后去重追加历史，并把 cur 指向新的末尾
+			return requestLocalSong(next.id, 'append')
+		}
+
+		// 管理员自动续播保留原规则；游客权限关闭或列表清空时由服务端引导回主线
+		return startPlaybackRequest(socket, { type: 'playback-next-request', mode: 'local', playbackId: current.playbackId }, { historyAction: 'append' })
+	}, [authenticated, localPlaybackOrder, options?.guestRoamingEnabled, options?.playbackOrder, requestLocalSong, startPlaybackRequest])
 
 	// 手动暂停脱离主线，只冻结当前歌曲；这不是游客自行选歌或拖动
 	const pause = useCallback(() => {
@@ -612,10 +732,15 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		authenticated,
 		playback,
 		playbackPending,
+		impactsRevision,
 		neteaseSync,
 		syncPending,
 		successfulSyncId,
+		localPlaybackOrder,
+		setLocalPlaybackOrder,
 		playSong,
+		hasPrevious: history.cur > 0 && Boolean(songs?.some(song => song.id === history.songIds[history.cur - 1] && Number.isFinite(song.duration) && song.duration > 0)),
+		playPrevious,
 		playNext,
 		pause,
 		returnToMain,

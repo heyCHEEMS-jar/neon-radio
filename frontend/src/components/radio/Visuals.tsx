@@ -47,47 +47,52 @@ export default function Visuals() {
 	}, [active, playback?.playbackId, playback?.positionMs, playback?.receivedAt, song])
 
 	return (
-		<section ref={visualsRef} className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化">
+		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化">
 			<canvas ref={topRef} className={`top-0 ${edgeClassName}`} aria-hidden="true" />
 
-			<div className="absolute top-1/2 grid w-full -translate-y-1/2 grid-cols-[minmax(0,1fr)_min(44vw,64vmin,480px)_minmax(0,1fr)] items-center gap-[clamp(8px,2vw,32px)] px-[clamp(16px,3vw,48px)]">
-				<div className={infoClassName}>
-					<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
-						{song?.name ?? '等待电台'}
-					</p>
-				</div>
-
-				<div ref={centerRef} className="relative aspect-square w-full origin-center will-change-transform @container">
-					<div
-						className={`${frameClassName} motion-safe:animate-[cover-frame-spin_24s_linear_infinite] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
-						style={{ animationPlayState }}
-						aria-hidden="true"
-					/>
-					<div
-						className={`${frameClassName} rotate-45 motion-safe:animate-[cover-frame-spin_24s_linear_infinite_reverse] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
-						style={{ animationPlayState }}
-						aria-hidden="true"
-					/>
-					<canvas ref={ringRef} className="absolute inset-0 z-10 block size-full" aria-hidden="true" />
-					<div
-						ref={coverRef}
-						className={`absolute top-1/2 left-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-[#101214] shadow-[0_0_0_1px_rgba(217,244,246,0.16),0_12px_32px_rgba(0,0,0,0.35)] ${config.coverClassName}`}
-					>
-						<img
-							ref={imageRef}
-							src={song?.picUrl || config.coverSrc}
-							alt=""
-							className="block size-full object-cover select-none will-change-transform"
-							style={{ transform: `scale(${config.camera.scale})` }}
-							draggable={false}
-						/>
+			<div className="absolute top-1/2 w-full -translate-y-1/2">
+				<div
+					ref={visualsRef}
+					className="grid w-full origin-center grid-cols-[minmax(0,1fr)_min(44vw,64vmin,480px)_minmax(0,1fr)] items-center gap-[clamp(8px,2vw,32px)] px-[clamp(16px,3vw,48px)] will-change-transform"
+				>
+					<div className={infoClassName}>
+						<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
+							{song?.name ?? '等待电台'}
+						</p>
 					</div>
-				</div>
 
-				<div className={infoClassName}>
-					<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
-						{progress}
-					</p>
+					<div ref={centerRef} className="relative aspect-square w-full origin-center will-change-transform @container">
+						<div
+							className={`${frameClassName} motion-safe:animate-[cover-frame-spin_24s_linear_infinite] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
+							style={{ animationPlayState }}
+							aria-hidden="true"
+						/>
+						<div
+							className={`${frameClassName} rotate-45 motion-safe:animate-[cover-frame-spin_24s_linear_infinite_reverse] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
+							style={{ animationPlayState }}
+							aria-hidden="true"
+						/>
+						<canvas ref={ringRef} className="absolute inset-0 z-10 block size-full" aria-hidden="true" />
+						<div
+							ref={coverRef}
+							className={`absolute top-1/2 left-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-[#101214] shadow-[0_0_0_1px_rgba(217,244,246,0.16),0_12px_32px_rgba(0,0,0,0.35)] ${config.coverClassName}`}
+						>
+							<img
+								ref={imageRef}
+								src={song?.picUrl || config.coverSrc}
+								alt=""
+								className="block size-full object-cover select-none will-change-transform"
+								style={{ transform: `scale(${config.camera.scale})` }}
+								draggable={false}
+							/>
+						</div>
+					</div>
+
+					<div className={infoClassName}>
+						<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
+							{progress}
+						</p>
+					</div>
 				</div>
 			</div>
 

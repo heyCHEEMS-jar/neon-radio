@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import config from '../config.js'
 import { initRoamingSongRepository } from '../repositories/roaming-song.js'
-import { initSongEnergyRepository } from '../repositories/song-energy.js'
+import { initSongImpactsRepository } from '../repositories/song-impacts.js'
 import { initRadioOptions } from '../services/radio/options.js'
-import { initEnergyAnalysis } from '../services/radio/energy.js'
+import { closeAudioAnalysis, initAudioAnalysis } from '../services/radio/audio-analysis.js'
 import { closeRadioPlayback, initRadioPlayback } from '../services/radio/playback.js'
 import { publishRoamingSongs, waitForRoamingSync } from '../services/radio/roaming-sync.js'
 import { initSession, refreshSession, waitForSessionUpdates } from '../services/session/netease-session.js'
@@ -15,9 +15,9 @@ import initRadioLive from '../websocket/radio-live.js'
 export default async function radioPlugin(fastify: FastifyInstance) {
 	await initSession()
 	// 会话初始化已保证数据库可用，独立的表初始化并行执行
-	await Promise.all([initRoamingSongRepository(), initSongEnergyRepository(), initRadioOptions()])
-	// 先订阅歌单发布，启动加载也会触发缺失包络的批量检查
-	initEnergyAnalysis()
+	await Promise.all([initRoamingSongRepository(), initSongImpactsRepository(), initRadioOptions()])
+	// 先订阅入库列表，启动加载也会补齐缺失的音频分析时间轴
+	initAudioAnalysis()
 	// 建连前加载已入库快照，首屏无需等待下一次刷新
 	await publishRoamingSongs()
 	initRadioPlayback()
@@ -34,9 +34,10 @@ export default async function radioPlugin(fastify: FastifyInstance) {
 		clearInterval(timer)
 		closeRadioPlayback()
 		clearQrCache()
-		// 在途会话操作可能安排歌曲同步，必须先等会话，再等同步
+		// 会话和漫游同步可能安排分析，先等待它们，再结束音频分析任务
 		await waitForSessionUpdates()
 		await waitForRoamingSync()
+		await closeAudioAnalysis()
 		await closeDatabase()
 	})
 }

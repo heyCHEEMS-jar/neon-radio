@@ -1,120 +1,137 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { Transform, type Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { Worker } from 'node:worker_threads'
 import axios from 'axios'
 
 // 按 CommonJS 实际导出读取路径，避开包声明在 NodeNext 下的默认导入类型错配
 const ffmpegPath: unknown = createRequire(import.meta.url)('ffmpeg-static')
+const PCM_RATE = 44_100
+const DOWNLOAD_LIMIT = 200 * 1024 * 1024
+const PCM_LIMIT = 128 * 1024 * 1024
+const ANALYSIS_TIMEOUT = 120_000
+export const AUDIO_ANALYSIS_VERSION = 2
 
-const FRAME_RATE = 60 // 每秒输出 60 个强度帧，对齐前端鼓点采样节奏
-const PCM_RATE = 48_000 // 解码采样率，48000 / 60 = 800 点合成一帧
-const MIN_DB = -70 // 强度映射窗口，-70dB 记 0、-5dB 记 255
-const MAX_DB = -5
-const DOWNLOAD_LIMIT = 200 * 1024 * 1024 // 音源文件大小上限，防止异常大文件写满磁盘
-
-export interface AudioBassEnvelope {
-	sampleRate: number // 每秒包络帧数
-	envelope: Buffer // 0–255 低频强度字节，时间从音源起点开始
+export interface AudioImpact {
+	timeMs: number
+	strength: number // 起音后短窗的原始全频 RMS 振幅
 }
 
-// 把一帧 RMS 换算成 0–255 强度字节，超出映射窗口按边界截断
-function rmsToByte(rms: number) {
-	if (rms <= 0) return 0
-	const db = 20 * Math.log10(rms)
-	return Math.round(Math.max(0, Math.min(255, ((db - MIN_DB) / (MAX_DB - MIN_DB)) * 255)))
+export interface AudioImpactTimeline {
+	analysisVersion: number
+	durationMs: number // 解码文件的实际时长，时间点从文件起点计时
+	impacts: AudioImpact[]
 }
 
-// 下载音源到临时文件，供 ffmpeg 随机读取
-async function downloadAudio(src: string) {
-	const file = path.join(tmpdir(), 'neon-radio-energy.tmp')
-	const response = await axios.get(src, { responseType: 'stream', timeout: 120_000, maxContentLength: DOWNLOAD_LIMIT })
-	try {
-		await pipeline(response.data, createWriteStream(file))
-	} catch (error: unknown) {
-		await rm(file, { force: true })
-		throw error
-	}
-	return file
+// 流式下载音源并限制实际接收大小，避免异常文件写满磁盘
+async function downloadAudio(src: string, file: string) {
+	const response = await axios.get<Readable>(src, { responseType: 'stream', timeout: ANALYSIS_TIMEOUT })
+	let received = 0
+	const limiter = new Transform({
+		transform(chunk: Buffer, _encoding, callback) {
+			received += chunk.length
+			if (received > DOWNLOAD_LIMIT) callback(new Error('音源文件超过分析大小限制'))
+			else callback(null, chunk)
+		}
+	})
+	await pipeline(response.data, limiter, createWriteStream(file))
 }
 
-// 用 ffmpeg 把音源过滤成 35–160Hz 单声道 PCM，按帧合成 RMS 强度字节
-function decodeBassEnvelope(file: string): Promise<Buffer> {
+// 解码完整频段的单声道 PCM，供 Essentia 离线分析
+function decodeAudio(file: string): Promise<Float32Array<ArrayBuffer>> {
 	return new Promise((resolve, reject) => {
 		if (typeof ffmpegPath !== 'string' || !ffmpegPath) throw new Error('ffmpeg-static 不支持当前平台架构')
 		const ffmpeg = spawn(
 			ffmpegPath,
 			[
-				'-hide_banner',
-				'-loglevel',
-				'error',
-				'-i',
-				file,
-				'-af',
-				'highpass=f=35,lowpass=f=160',
-				'-ac',
-				'1',
-				'-ar',
-				String(PCM_RATE),
-				'-f',
-				's16le',
-				'pipe:1'
+				'-nostdin', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,pipe',
+				'-i', file, '-vn', '-ac', '1', '-ar', String(PCM_RATE), '-f', 'f32le', 'pipe:1'
 			],
 			{ windowsHide: true }
 		)
-		const pcm: Buffer[] = [] // 收集整段滤波后的 PCM，结束后统一合成
-		const stderr: Buffer[] = [] // 截取 ffmpeg 的报错信息用于日志
-		let stderrLength = 0
-		ffmpeg.stdout.on('data', (chunk: Buffer) => pcm.push(chunk))
-		ffmpeg.stderr.on('data', (chunk: Buffer) => {
-			if (stderrLength >= 4096) return
-			stderr.push(chunk)
-			stderrLength += chunk.length
-		})
-		ffmpeg.on('error', (error: NodeJS.ErrnoException) =>
-			reject(
-				error.code === 'ENOENT'
-					? new Error(`ffmpeg-static 可执行文件缺失（${ffmpegPath}），请重新安装依赖并确认其安装脚本已执行`)
-					: error
-			)
-		)
-		ffmpeg.on('close', code => {
-			if (code !== 0) {
-				const message = Buffer.concat(stderr).toString('utf8').trim().split('\n').pop() || `ffmpeg 退出码 ${code}`
-				reject(new Error(`ffmpeg 解码失败：${message}`))
+		const chunks: Buffer[] = []
+		let size = 0
+		let stderr = ''
+		let failure: Error | null = null
+		const timer = setTimeout(() => {
+			failure = new Error('音频解码超时')
+			ffmpeg.kill()
+		}, ANALYSIS_TIMEOUT)
+		ffmpeg.stdout.on('data', (chunk: Buffer) => {
+			if (failure) return
+			size += chunk.length
+			if (size > PCM_LIMIT) {
+				failure = new Error('音频解码结果超过分析大小限制')
+				ffmpeg.kill()
 				return
 			}
-			const data = Buffer.concat(pcm)
-			const windowSize = PCM_RATE / FRAME_RATE
-			const frames: number[] = []
-			let pendingCount = 0 // 当前帧已累计的样本数
-			let sumSquares = 0 // 当前帧样本平方和
-			for (let offset = 0; offset + 1 < data.length; offset += 2) {
-				const sample = data.readInt16LE(offset) / 32768
-				sumSquares += sample * sample
-				if (++pendingCount < windowSize) continue
-				frames.push(rmsToByte(Math.sqrt(sumSquares / windowSize)))
-				pendingCount = 0
-				sumSquares = 0
-			}
-			// 末尾不足一帧的样本按实际帧长合成，避免丢掉最后一拍
-			if (pendingCount > 0) frames.push(rmsToByte(Math.sqrt(sumSquares / pendingCount)))
-			resolve(Buffer.from(frames))
+			chunks.push(chunk)
+		})
+		ffmpeg.stderr.on('data', (chunk: Buffer) => {
+			if (stderr.length < 4096) stderr += chunk.toString('utf8').slice(0, 4096 - stderr.length)
+		})
+		ffmpeg.once('error', (error: NodeJS.ErrnoException) => {
+			failure = error.code === 'ENOENT' ? new Error(`ffmpeg-static 可执行文件缺失（${ffmpegPath}）`) : error
+		})
+		// 等待子进程关闭后再结束请求，Windows 上临时文件才不会仍被占用
+		ffmpeg.once('close', code => {
+			clearTimeout(timer)
+			if (failure) return reject(failure)
+			if (code !== 0) return reject(new Error(`ffmpeg 解码失败：${stderr.trim().split('\n').pop() || code}`))
+			if (!size || size % 4) return reject(new Error('音频解码结果为空或格式异常'))
+			const data = Buffer.concat(chunks, size)
+			const signal = new Float32Array(size / 4)
+			for (let index = 0; index < signal.length; index += 1) signal[index] = data.readFloatLE(index * 4)
+			resolve(signal)
 		})
 	})
 }
 
-// 下载并用 ffmpeg 分析音源的低频强度包络，完成后清理临时文件
-export async function fetchBassEnvelope(src: string): Promise<AudioBassEnvelope> {
-	const file = await downloadAudio(src)
+// 在线程中生成震动时间轴，CPU 密集分析不阻塞电台时钟和实时连接
+function analyzeImpacts(signal: Float32Array<ArrayBuffer>): Promise<AudioImpactTimeline> {
+	return new Promise((resolve, reject) => {
+		const worker = new Worker(new URL('./audio-analysis-worker.mjs', import.meta.url), {
+			workerData: { signal, sampleRate: PCM_RATE, analysisVersion: AUDIO_ANALYSIS_VERSION },
+			transferList: [signal.buffer]
+		})
+		let result: AudioImpactTimeline | null = null
+		let failure: Error | null = null
+		const timer = setTimeout(() => {
+			failure = new Error('音频分析超时')
+			void worker.terminate()
+		}, ANALYSIS_TIMEOUT)
+		worker.once('message', (timeline: AudioImpactTimeline) => {
+			result = timeline
+		})
+		worker.once('error', (error: Error) => {
+			failure = error
+		})
+		worker.once('exit', code => {
+			clearTimeout(timer)
+			if (failure) return reject(failure)
+			if (code !== 0 || !result) return reject(new Error('音频分析未完成'))
+			resolve(result)
+		})
+	})
+}
+
+// 下载、解码并分析完整音源，所有阶段结束后清理独立临时目录
+export async function fetchImpactTimeline(src: string): Promise<AudioImpactTimeline> {
+	const directory = await mkdtemp(path.join(tmpdir(), 'neon-radio-impacts-'))
 	try {
-		const envelope = await decodeBassEnvelope(file)
-		if (!envelope.length) throw new Error('音源解码结果为空')
-		return { sampleRate: FRAME_RATE, envelope }
+		const file = path.join(directory, 'audio')
+		// 下载到独立文件，ffmpeg 不直接访问远程地址
+		await downloadAudio(src, file)
+		// 解码为 Essentia 所需的单声道 44100Hz 音频
+		const signal = await decodeAudio(file)
+		// 将 PCM 转交分析线程，只返回稀疏的时间点和强度
+		return await analyzeImpacts(signal)
 	} finally {
-		await rm(file, { force: true })
+		await rm(directory, { recursive: true, force: true })
 	}
 }

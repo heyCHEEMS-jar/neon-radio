@@ -5,6 +5,25 @@ import { toast } from 'sonner'
 import { visualizerConfig as config } from '@/config/visualizer'
 import { getPlaybackPosition, type RadioLiveState } from './useRadioLive'
 
+export interface RadioImpact {
+	timeMs: number
+	strength: number // 起音后的原始全频 RMS 振幅
+}
+
+export interface RadioImpactFrame {
+	playbackId: string
+	positionMs: number
+	impacts: RadioImpact[]
+	peakStrength: number
+}
+
+interface RadioImpactTimeline {
+	songId: string
+	durationMs: number
+	impacts: RadioImpact[]
+	peakStrength: number
+}
+
 export interface RadioAudioState {
 	audioRef: RefObject<HTMLAudioElement | null> // 页面唯一音频元素，播放器读取实际进度
 	started: boolean // 是否完成首次点击，决定播放器位置和初始模糊层
@@ -14,7 +33,7 @@ export interface RadioAudioState {
 	range: { start: number; end: number } // 当前可播放区间，单位秒，试听进度只展示这段
 	toggle: () => void
 	readSpectrum: (data: Uint8Array<ArrayBuffer>) => number // 返回实际采样率，分析节点未初始化时为 0
-	readBass: () => number | null // 返回当前播放位置的服务端低频强度 0–1，null 表示没有可用数据，不触发震动
+	readImpacts: () => RadioImpactFrame | null // 返回当前歌曲的时间轴与媒体进度，无数据或未播放时为 null
 }
 
 export const RadioAudioContext = createContext<RadioAudioState | null>(null)
@@ -33,7 +52,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 	const sourceIdRef = useRef<string | null>(null) // 当前音频地址对应的歌曲，避免旧媒体事件影响新歌曲
 	const contextRef = useRef<AudioContext | null>(null) // 首次用户手势创建的音频上下文
 	const analyserRef = useRef<AnalyserNode | null>(null) // 三个画布共用一个频谱分析节点
-	const energyRef = useRef<{ songId: string; frameRate: number; bytes: Uint8Array } | null>(null) // 当前歌曲的服务端低频包络
+	const impactTimelineRef = useRef<RadioImpactTimeline | null>(null) // 当前歌曲的服务端震动时间轴
 	liveRef.current = live
 
 	// 根据实际音频时长区分已裁切的试听片段与完整文件上的试听区间
@@ -261,26 +280,49 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 		return () => controller.abort()
 	}, [audioRef, getPlayableRange, live.playback?.playbackId, live.playback?.song?.id, live.playback?.song?.duration, play, retry, syncPlayback])
 
-	// 每首歌拉取一次服务端低频包络，让震动可视化不依赖浏览器对音源的跨域分析
+	// 播放实例或分析结果更新时读取时间轴，缺失时不触发冲击
 	useEffect(() => {
 		const songId = live.playback?.song?.id
 		const controller = new AbortController()
-		energyRef.current = null // 换歌立即清空旧包络，加载期间不触发上一首歌的冲击
+		impactTimelineRef.current = null
 		if (!songId) return () => controller.abort()
 		void (async () => {
 			try {
-				const response = await fetch(`/neon-radio/radio-energy/${encodeURIComponent(songId)}`, { cache: 'no-store', signal: controller.signal })
-				if (!response.ok) throw new Error('包络请求失败')
-				const rate = Number(response.headers.get('x-envelope-rate')) || 60
-				const bytes = new Uint8Array(await response.arrayBuffer())
+				// 拉取本站保存的音频时间点和原始强度
+				const response = await fetch(`/neon-radio/radio-impacts/${encodeURIComponent(songId)}`, { cache: 'no-store', signal: controller.signal })
+				const result: unknown = await response.json()
+				if (!response.ok || typeof result !== 'object' || result === null || !('code' in result) || result.code !== 200 || !('data' in result))
+					throw new Error('音频时间轴请求失败')
+				const data = result.data
+				if (
+					typeof data !== 'object' || data === null ||
+					!('durationMs' in data) || typeof data.durationMs !== 'number' || !Number.isInteger(data.durationMs) || data.durationMs <= 0 ||
+					!('impacts' in data) || !Array.isArray(data.impacts)
+				) throw new Error('音频时间轴格式异常')
+				// 校验递增时间点，只在加载时计算强度上限供动画归一化
+				const points: unknown[] = data.impacts
+				const impacts: RadioImpact[] = []
+				let previousTime = -1
+				let peakStrength = 0
+				for (const point of points) {
+					if (
+						typeof point !== 'object' || point === null ||
+						!('timeMs' in point) || typeof point.timeMs !== 'number' || !Number.isInteger(point.timeMs) ||
+						point.timeMs < 0 || point.timeMs <= previousTime || point.timeMs > data.durationMs ||
+						!('strength' in point) || typeof point.strength !== 'number' || !Number.isFinite(point.strength) || point.strength <= 0
+					) throw new Error('音频时间点格式异常')
+					previousTime = point.timeMs
+					peakStrength = Math.max(peakStrength, point.strength)
+					impacts.push({ timeMs: point.timeMs, strength: point.strength })
+				}
 				if (controller.signal.aborted || liveRef.current.playback?.song?.id !== songId) return
-				energyRef.current = bytes.length ? { songId, frameRate: rate, bytes } : null
+				impactTimelineRef.current = { songId, durationMs: data.durationMs, impacts, peakStrength }
 			} catch {
-				if (!controller.signal.aborted) energyRef.current = null
+				if (!controller.signal.aborted) impactTimelineRef.current = null
 			}
 		})()
 		return () => controller.abort()
-	}, [live.playback?.song?.id])
+	}, [live.playback?.song?.id, live.playback?.playbackId, live.impactsRevision])
 
 	// WS 确认后才应用换曲或定位，202 受理不会让媒体提前跳到旧快照
 	useLayoutEffect(() => {
@@ -359,21 +401,25 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 		[audioRef]
 	)
 
-	// 按媒体实际进度查当前歌曲的包络，无数据、未播放或进度越界时返回 null
-	const readBass = useCallback((): number | null => {
+	// 提供已入库的时间点与真实媒体进度，未就绪时返回 null
+	const readImpacts = useCallback((): RadioImpactFrame | null => {
 		const audio = audioRef.current
-		const energy = energyRef.current
+		const timeline = impactTimelineRef.current
+		const playback = liveRef.current.playback
 		if (
-			!audio ||
-			!energy ||
-			energy.songId !== sourceIdRef.current ||
-			energy.songId !== liveRef.current.playback?.song?.id ||
-			audio.paused ||
-			audio.readyState < 1
+			!audio || !timeline || !playback?.song || !playback.playbackId ||
+			timeline.songId !== sourceIdRef.current || timeline.songId !== playback.song.id ||
+			audio.dataset.playbackId !== playback.playbackId || audio.paused || audio.seeking || audio.readyState < 1
 		) return null
-		const frame = Math.floor(audio.currentTime * energy.frameRate)
-		return frame >= 0 && frame < energy.bytes.length ? energy.bytes[frame] / 255 : null
+		// 不把完整文件的时间轴错用于裁切后的试听音源
+		if (!Number.isFinite(audio.duration) || Math.abs(audio.duration * 1000 - timeline.durationMs) > 1000) return null
+		return {
+			playbackId: playback.playbackId,
+			positionMs: audio.currentTime * 1000,
+			impacts: timeline.impacts,
+			peakStrength: timeline.peakStrength
+		}
 	}, [audioRef])
 
-	return { audioRef, started, playing, loading, error, range, toggle, readSpectrum, readBass }
+	return { audioRef, started, playing, loading, error, range, toggle, readSpectrum, readImpacts }
 }

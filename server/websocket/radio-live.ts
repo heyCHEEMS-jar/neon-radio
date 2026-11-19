@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import WebSocket, { WebSocketServer } from 'ws'
 import { readBrowserToken } from '../http/browser-token.js'
 import { isSameOrigin } from '../http/same-origin.js'
+import { audioAnalysisEvents } from '../services/radio/audio-analysis.js'
 import { getRadioOptions, radioOptionsEvents, updateRadioOption, type RadioOptions } from '../services/radio/options.js'
 import {
 	cancelScheduledMainPlayback,
@@ -91,6 +92,8 @@ export default function initRadioLive(fastify: FastifyInstance) {
 	}
 	// 歌曲列表继续发送给主线和本地连接
 	const broadcastSongs = (songs: RadioSong[]) => broadcast({ type: 'radio-songs', data: songs })
+	// 分析完成只广播歌曲 ID，让当前歌曲的听众拉取新的时间轴
+	const broadcastImpactsReady = (songId: string) => broadcast({ type: 'radio-impacts-ready', data: songId })
 	// 本地连接不接收主线播放同步
 	const broadcastPlayback = (snapshot: PlaybackSnapshot) =>
 		broadcast({ type: 'playback-state', data: snapshot }, socket => !localConnections.has(socket))
@@ -380,6 +383,7 @@ export default function initRadioLive(fastify: FastifyInstance) {
 	})
 	radioOptionsEvents.on('change', broadcastOptions)
 	roamingSongsEvents.on('change', broadcastSongs)
+	audioAnalysisEvents.on('ready', broadcastImpactsReady)
 	playbackEvents.on('change', broadcastPlayback)
 	neteaseSyncEvents.on('change', sendSync)
 
@@ -404,6 +408,7 @@ export default function initRadioLive(fastify: FastifyInstance) {
 		cancelScheduledMainPlayback()
 		radioOptionsEvents.off('change', broadcastOptions)
 		roamingSongsEvents.off('change', broadcastSongs)
+		audioAnalysisEvents.off('ready', broadcastImpactsReady)
 		playbackEvents.off('change', broadcastPlayback)
 		neteaseSyncEvents.off('change', sendSync)
 		for (const socket of server.clients) socket.terminate()

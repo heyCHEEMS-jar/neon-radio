@@ -15,7 +15,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ------------------------------------------------------------------------
-Third-party notices: ffmpeg-static and FFmpeg
+Third-party notices: ffmpeg-static, FFmpeg and Essentia.js
 ------------------------------------------------------------------------
 
 The ISC license above applies to the original neon-radio code. Third-party
@@ -42,6 +42,15 @@ FFmpeg binaries downloaded by ffmpeg-static
 
   Other platforms and custom binaries may have different build details
   and licensing requirements; consult their accompanying notices.
+
+Essentia.js (npm package, version 0.1.3)
+  License: AGPL-3.0
+  Source: https://github.com/MTG/essentia.js
+  The full license is included in the installed package at
+  server/node_modules/essentia.js/LICENSE.
+  Use and redistribution are subject to the AGPL, including applicable
+  network-use and Corresponding Source requirements. The ISC notice above
+  does not replace those obligations.
 
 Redistributing GPL-covered binaries, including in a release archive or
 container image, requires compliance with the applicable GPL terms.

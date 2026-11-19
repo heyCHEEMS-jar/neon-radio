@@ -1,6 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 import { visualizerConfig as config } from '@/config/visualizer'
-import { RadioAudioContext } from '@/hooks/useRadioAudio'
+import { RadioAudioContext, type RadioImpact } from '@/hooks/useRadioAudio'
 
 interface Drawing {
 	draw(data: Uint8Array<ArrayBuffer>, context: CanvasRenderingContext2D, sampleRate: number, dt: number): void
@@ -84,11 +84,11 @@ function createSpectrumSampler(count: number, minFrequency: number, maxFrequency
 	}
 }
 
-// 共用音频分析节点驱动频谱与鼓点冲击，保留场景暂停和低动态偏好
+// 实时频谱负责绘制，服务端时间轴触发冲击，保留场景暂停和低动态偏好
 export function useVisualizer(active = true) {
 	const readSpectrum = useContext(RadioAudioContext)?.readSpectrum
-	const readBass = useContext(RadioAudioContext)?.readBass
-	const visualsRef = useRef<HTMLElement>(null)
+	const readImpacts = useContext(RadioAudioContext)?.readImpacts
+	const visualsRef = useRef<HTMLDivElement>(null)
 	const centerRef = useRef<HTMLDivElement>(null)
 	const ringRef = useRef<HTMLCanvasElement>(null)
 	const coverRef = useRef<HTMLDivElement>(null)
@@ -115,28 +115,27 @@ export function useVisualizer(active = true) {
 		const ringContext = ring?.getContext('2d')
 		const topContext = top?.getContext('2d')
 		const bottomContext = bottom?.getContext('2d')
-		if (!visuals || !center || !ring || !cover || !image || !top || !bottom || !ringContext || !topContext || !bottomContext || !readSpectrum || !readBass) return
+		if (!visuals || !center || !ring || !cover || !image || !top || !bottom || !ringContext || !topContext || !bottomContext || !readSpectrum || !readImpacts) return
 
 		const spectrum = new Uint8Array(config.bufferSize) // 仅供圆环和上下边缘绘制，不参与震动判定
 		const ringCurve = createSpectrumCurve(config.ring)
 		const edgeCurve = createSpectrumCurve(config.edges)
 		const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 		const frameInterval = 1 / config.maxFps
-		const beatInterval = 1 / 60
+		const impactInterval = 1 / 60
 		let disposed = false
 		let frameId = 0
 		let previousTime: number | null = null
 		let elapsed = 0
 		let previousPaintTime = 0
 		let backlog = frameInterval
-		let beatBacklog = beatInterval
+		let impactBacklog = impactInterval
 		let sampleRate = 0
 		let views: View[] = []
 		let coverWidth = 0
 		let maxCameraOffset = 0
 		let cameraStartedAt = 0
 		const settings = config.shake
-		const bassBaselineRate = 1 / settings.baselineSeconds
 		let shakeAnimation: Animation | null = null
 		let centerAnimation: Animation | null = null
 		const shakeFrames: Keyframe[] = [
@@ -151,10 +150,10 @@ export function useVisualizer(active = true) {
 			{ offset: 0.5 },
 			{ transform: 'scale(1)', offset: 1 }
 		]
-		let bassBaseline = 0
-		let previousBass = 0
-		let beatReady = false
-		let lastBeatAt = -Infinity
+		let impactPlaybackId: string | null = null
+		let impactPoints: RadioImpact[] | null = null
+		let impactPositionMs = 0
+		let impactIndex = 0
 		let maxShakeOffset = settings.levels.high.offset
 		// 以约 6–7 秒的缓慢起伏为主，叠加少量更慢的漂移，去掉高频抖动
 		const cameraMotion = Array.from({ length: 3 }, () => {
@@ -180,64 +179,86 @@ export function useVisualizer(active = true) {
 			image.style.transform = `translate(${x}px, ${y}px) rotate(${rotation}deg) scale(${config.camera.scale})`
 		}
 
-		// 停止鼓点冲击并重置检测基线，恢复时不把持续低音误判成新鼓点
+		// 暂停、换曲或场景恢复时停止旧冲击，并重新定位事件游标
 		const resetShake = () => {
 			shakeAnimation?.cancel()
 			centerAnimation?.cancel()
 			shakeAnimation = null
 			centerAnimation = null
-			beatReady = false
-			lastBeatAt = -Infinity
+			impactPlaybackId = null
+			impactPoints = null
+			impactPositionMs = 0
+			impactIndex = 0
 		}
 
-		// 仅使用服务端包络，无数据时停止冲击并清除检测基线
-		const shakeToBeat = (dt: number) => {
-			if (reducedMotion.matches) return
-			const bass = readBass()
-			if (bass === null) {
-				if (beatReady) resetShake()
-				return
-			}
-			if (!beatReady) {
-				bassBaseline = previousBass = bass
-				beatReady = true
-				return
-			}
-			// 只比较低音频带当前冲击与自身慢基线，不读取中高频，也不判断音高
-			const rise = bass - previousBass
-			const excess = bass - bassBaseline
-			const onsetScore = Math.max(rise, excess) / Math.max(0.08, bassBaseline)
-			previousBass = bass
-			bassBaseline += (bass - bassBaseline) * Math.min(1, dt * bassBaselineRate)
-			if (rise <= 0 || excess < settings.noiseFloor || onsetScore < settings.levels.medium.minOnset) return
-			if (elapsed - lastBeatAt < settings.cooldownSeconds) return
-
-			const level = onsetScore >= settings.levels.high.minOnset ? 'high' : 'medium'
+		// 时间轴已决定触发点，中央区域按相对强度播放三档冲击
+		const triggerImpact = (strength: number) => {
+			let level: keyof typeof settings.levels = 'low'
+			if (strength >= settings.highStrength) level = 'high'
+			else if (strength >= settings.mediumStrength) level = 'medium'
 			const stage = settings.levels[level]
-			const strength = Math.min(1, onsetScore / (settings.levels.high.minOnset * 1.5))
+			// 密集鼓点从当前姿态接续，避免取消旧动画时瞬间跳回原位
+			shakeFrames[0].transform =
+				shakeAnimation?.playState === 'running' ? window.getComputedStyle(visuals).transform : 'translate3d(0, 0, 0) scale(1)'
+			centerFrames[0].transform = centerAnimation?.playState === 'running' ? window.getComputedStyle(center).transform : 'scale(1)'
 			const impact = 0.6 + strength * 0.4
 			const amplitude = Math.min(stage.offset, maxShakeOffset) * impact
-
-			// 每个鼓点只生成一次随机冲击方向，两档使用不同的幅度、时长和缩放
-			lastBeatAt = elapsed
 			const angle = Math.random() * Math.PI * 2
 			const x = Math.cos(angle) * amplitude
 			const y = Math.sin(angle) * amplitude
 			const recoil = -(0.35 + Math.random() * 0.25)
-			shakeFrames[1].offset = level === 'high' ? 0.08 : 0.11
-			shakeFrames[2].offset = level === 'high' ? 0.32 : 0.4
+			shakeFrames[1].offset = 0.15
+			shakeFrames[2].offset = 0.5
+			if (level !== 'low') {
+				shakeFrames[1].offset = level === 'high' ? 0.08 : 0.11
+				shakeFrames[2].offset = level === 'high' ? 0.32 : 0.4
+			}
 			shakeFrames[1].transform = `translate3d(${x}px, ${y}px, 0) scale(${1 + stage.scale * impact})`
 			shakeFrames[2].transform = `translate3d(${x * recoil}px, ${y * recoil}px, 0) scale(1)`
 			shakeAnimation?.cancel()
 			shakeAnimation = visuals.animate(shakeFrames, { duration: stage.duration, easing: 'linear' })
 
-			// 中央封面、双方框和圆环使用同一级别的独立鼓起与回缩
+			// 中央封面与圆环使用独立缩放，保持同一次冲击的鼓起与回缩
 			centerFrames[1].offset = shakeFrames[1].offset
 			centerFrames[2].offset = level === 'high' ? 0.38 : shakeFrames[2].offset
 			centerFrames[1].transform = `scale(${1 + stage.centerScale * impact})`
 			centerFrames[2].transform = `scale(${1 - stage.centerRecoil * impact})`
 			centerAnimation?.cancel()
 			centerAnimation = center.animate(centerFrames, { duration: stage.duration, easing: 'linear' })
+		}
+
+		// 按媒体进度消费已入库时间点，跳转不补播过去的冲击
+		const playImpacts = () => {
+			const timeline = readImpacts()
+			if (!timeline) {
+				if (impactPlaybackId !== null) resetShake()
+				return
+			}
+			const position = timeline.positionMs
+			if (impactPlaybackId !== timeline.playbackId || impactPoints !== timeline.impacts || position < impactPositionMs || position - impactPositionMs > 250) {
+				resetShake()
+				impactPlaybackId = timeline.playbackId
+				impactPoints = timeline.impacts
+				// 二分定位当前进度之后的首个点，避免 seek 或恢复页面时批量补震
+				let left = 0
+				let right = timeline.impacts.length
+				while (left < right) {
+					const middle = Math.floor((left + right) / 2)
+					if (timeline.impacts[middle].timeMs <= position) left = middle + 1
+					else right = middle
+				}
+				impactIndex = left
+				impactPositionMs = position
+				return
+			}
+			impactPositionMs = position
+			let due: RadioImpact | null = null
+			while (impactIndex < timeline.impacts.length && timeline.impacts[impactIndex].timeMs <= position) {
+				due = timeline.impacts[impactIndex]
+				impactIndex += 1
+			}
+			// 超过 100ms 的迟到冲击丢弃，不让卡顿后的画面与音乐错拍
+			if (due && position - due.timeMs <= 100) triggerImpact(due.strength / timeline.peakStrength)
 		}
 
 		// 圆环和边缘独立读取实时频谱，只负责绘制，不参与震动判定
@@ -252,7 +273,7 @@ export function useVisualizer(active = true) {
 			}
 		}
 
-		// 服务端包络按 60 FPS 读取，频谱和封面按配置帧率更新
+		// 时间轴按 60 FPS 对齐媒体进度，频谱和封面按配置帧率更新
 		const tick = (now: number) => {
 			frameId = 0
 			if (disposed || !activeRef.current || document.hidden || reducedMotion.matches) return
@@ -260,11 +281,10 @@ export function useVisualizer(active = true) {
 			const dt = previousTime === null ? 0 : Math.min((now - previousTime) / 1000, 0.1)
 			previousTime = now
 			elapsed += dt
-			beatBacklog += dt
-			if (beatBacklog >= beatInterval) {
-				const beatDt = Math.min(beatBacklog, 0.1)
-				shakeToBeat(beatDt)
-				beatBacklog %= beatInterval
+			impactBacklog += dt
+			if (impactBacklog >= impactInterval) {
+				playImpacts()
+				impactBacklog %= impactInterval
 			}
 			backlog += dt
 			if (backlog >= frameInterval) {
@@ -280,7 +300,7 @@ export function useVisualizer(active = true) {
 			if (disposed || !activeRef.current || document.hidden || reducedMotion.matches || frameId || !views.length) return
 			previousTime = null
 			backlog = frameInterval
-			beatBacklog = beatInterval
+			impactBacklog = impactInterval
 			frameId = window.requestAnimationFrame(tick)
 		}
 
@@ -486,7 +506,7 @@ export function useVisualizer(active = true) {
 			views = []
 			image.style.transform = `scale(${config.camera.scale})`
 		}
-	}, [readBass, readSpectrum])
+	}, [readImpacts, readSpectrum])
 
 	return { visualsRef, centerRef, ringRef, coverRef, imageRef, topRef, bottomRef }
 }
