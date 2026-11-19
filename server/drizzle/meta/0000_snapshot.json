@@ -1,0 +1,280 @@
+{
+  "version": "5",
+  "dialect": "mysql",
+  "id": "1ede9fca-1b40-48d9-9953-1e94a5ea3bb2",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "browser_sessions": {
+      "name": "browser_sessions",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "binary(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "netease_uid": {
+          "name": "netease_uid",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "browser_sessions_uid": {
+          "name": "browser_sessions_uid",
+          "columns": [
+            "netease_uid"
+          ],
+          "isUnique": false
+        },
+        "browser_sessions_expires": {
+          "name": "browser_sessions_expires",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "browser_sessions_token_hash": {
+          "name": "browser_sessions_token_hash",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "netease_sessions": {
+      "name": "netease_sessions",
+      "columns": {
+        "netease_uid": {
+          "name": "netease_uid",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cookie_envelope": {
+          "name": "cookie_envelope",
+          "type": "mediumblob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "netease_sessions_netease_uid": {
+          "name": "netease_sessions_netease_uid",
+          "columns": [
+            "netease_uid"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "radio_options": {
+      "name": "radio_options",
+      "columns": {
+        "netease_uid": {
+          "name": "netease_uid",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "guest_roaming_enabled": {
+          "name": "guest_roaming_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "force_main_playback_sync_enabled": {
+          "name": "force_main_playback_sync_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "playback_order": {
+          "name": "playback_order",
+          "type": "enum('random','sequential','single')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'random'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "radio_options_netease_uid": {
+          "name": "radio_options_netease_uid",
+          "columns": [
+            "netease_uid"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "roaming_songs": {
+      "name": "roaming_songs",
+      "columns": {
+        "netease_uid": {
+          "name": "netease_uid",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "song_key": {
+          "name": "song_key",
+          "type": "char(64) CHARACTER SET ascii COLLATE ascii_bin",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "int unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "song": {
+          "name": "song",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "roaming_songs_order": {
+          "name": "roaming_songs_order",
+          "columns": [
+            "netease_uid",
+            "sort_order"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "roaming_songs_netease_uid_song_key_pk": {
+          "name": "roaming_songs_netease_uid_song_key_pk",
+          "columns": [
+            "netease_uid",
+            "song_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "roaming_song_impacts": {
+      "name": "roaming_song_impacts",
+      "columns": {
+        "netease_uid": {
+          "name": "netease_uid",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "song_id": {
+          "name": "song_id",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "analysis_version": {
+          "name": "analysis_version",
+          "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "int unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "impacts": {
+          "name": "impacts",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "analyzed_at": {
+          "name": "analyzed_at",
+          "type": "datetime",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "roaming_song_impacts_netease_uid_song_id_pk": {
+          "name": "roaming_song_impacts_netease_uid_song_id_pk",
+          "columns": [
+            "netease_uid",
+            "song_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    }
+  },
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {},
+    "indexes": {}
+  }
+}

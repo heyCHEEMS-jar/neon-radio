@@ -9,21 +9,20 @@
 	},
 	"packageManager": "pnpm@12.6.0",
 	"type": "module",
-	"main": "start.js",
 	"scripts": {
-		"dev": "node start.js --dev",
-		"start": "node start.js --prod",
+		"dev": "node scripts/dev.mjs",
+		"start": "node scripts/start.mjs",
+		"build": "pnpm --dir frontend build",
+		"typecheck": "pnpm --dir server typecheck && pnpm --dir frontend typecheck",
+		"clean": "node scripts/clean.mjs",
 		"stop": "pm2 stop neon-radio-api neon-radio-web",
 		"log": "pm2 logs"
 	},
-	"workspaces": [
-		"frontend",
-		"server"
-	],
 	"dependencies": {
 		"pm2": "^7.1.2"
 	},
 	"devDependencies": {
+		"concurrently": "^10.0.7",
 		"tsx": "^4.23.15"
 	}
 }

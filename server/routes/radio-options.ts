@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify'
-import { getRadioOptions, updateRadioOption, type RadioOptions } from '../services/radio/options.js'
+import type { PlaybackOrder } from '@neon-radio/protocol'
+import { getRadioOptions, updateRadioOption } from '../modules/settings/index.js'
 
-type OptionUpdate =
-	| { key: 'playbackOrder'; value: RadioOptions['playbackOrder'] }
-	| { key: Exclude<keyof RadioOptions, 'playbackOrder'>; value: boolean }
+type OptionUpdate = { key: 'playbackOrder'; value: PlaybackOrder } | { key: 'guestRoamingEnabled' | 'forceMainPlaybackSyncEnabled'; value: boolean }
 
 // 开关和播放顺序都单项保存，服务器校验选项与值的对应关系
 export default async function radioOptionsRoutes(fastify: FastifyInstance) {
@@ -13,15 +12,21 @@ export default async function radioOptionsRoutes(fastify: FastifyInstance) {
 		{
 			schema: {
 				body: {
-					type: 'object', additionalProperties: false, required: ['key', 'value'],
+					type: 'object',
+					additionalProperties: false,
+					required: ['key', 'value'],
 					properties: { key: { type: 'string' }, value: {} },
 					oneOf: [
-						{ properties: { key: { enum: ['guestRoamingEnabled', 'emojiChatEnabled', 'forceMainPlaybackSyncEnabled'] }, value: { type: 'boolean' } } },
+						{ properties: { key: { enum: ['guestRoamingEnabled', 'forceMainPlaybackSyncEnabled'] }, value: { type: 'boolean' } } },
 						{ properties: { key: { const: 'playbackOrder' }, value: { type: 'string', enum: ['random', 'sequential', 'single'] } } }
 					]
 				}
 			}
 		},
-		async request => ({ code: 200, data: await updateRadioOption(request.body.key, request.body.value) })
+		async request => {
+			const { key, value } = request.body
+			const data = key === 'playbackOrder' ? await updateRadioOption('playbackOrder', value) : await updateRadioOption(key, value)
+			return { code: 200, data }
+		}
 	)
 }

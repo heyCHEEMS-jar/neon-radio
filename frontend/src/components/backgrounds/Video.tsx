@@ -1,7 +1,7 @@
 'use client'
 
 import { useContext, useEffect, useRef } from 'react'
-import { RadioSceneContext } from '@/components/radio/Radio'
+import { RadioSceneContext } from '@/features/radio/scene'
 
 export default function Video() {
 	const active = useContext(RadioSceneContext)

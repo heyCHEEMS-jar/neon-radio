@@ -3,13 +3,12 @@
 		"target": "ES2022",
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
-		"rootDir": ".",
-		"outDir": "./dist",
-		"lib": ["esnext"],
-		"types": ["node"],
-		"sourceMap": true,
-		"declaration": true,
-		"declarationMap": true,
+		"lib": [
+			"esnext"
+		],
+		"types": [
+			"node"
+		],
 		"noUncheckedIndexedAccess": true,
 		"exactOptionalPropertyTypes": true,
 		"strict": true,
@@ -20,6 +19,7 @@
 		"moduleDetection": "force",
 		"skipLibCheck": true,
 		"allowJs": true,
-		"esModuleInterop": true
+		"esModuleInterop": true,
+		"noEmit": true
 	}
 }

@@ -6,12 +6,13 @@ build/
 # Logs
 logs/
 *.log
+*.tsbuildinfo
 pnpm-debug.log*
 
 # Lock files
-pnpm-lock.yaml
 package-lock.json
 yarn.lock
+server/vendor/ncm-api/pnpm-lock.yaml
 
 # Radio login state (contains account credentials)
 .data/

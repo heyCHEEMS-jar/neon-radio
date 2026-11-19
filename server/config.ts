@@ -1,5 +1,4 @@
 const config = {
-	PACKAGE_TOOL: process.env.PACKAGE_TOOL || 'pnpm',
 	API_PORT: Number(process.env.API_PORT || '4003'),
 	NETEASE_UID: process.env.NETEASE_UID?.trim() || '',
 	COOKIE_REFRESH_HOURS: Number(process.env.COOKIE_REFRESH_HOURS || '6'),

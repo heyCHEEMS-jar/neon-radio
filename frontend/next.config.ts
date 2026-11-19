@@ -4,6 +4,7 @@ const apiPort = process.env.API_PORT || '4003'
 
 const nextConfig: NextConfig = {
 	reactStrictMode: true,
+	transpilePackages: ['@neon-radio/protocol'],
 	async rewrites() {
 		return [
 			{

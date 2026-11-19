@@ -1,34 +1,35 @@
-import type { FastifyInstance } from 'fastify'
-import { ApiError } from '../utils/api-error.js'
-import { isRecord } from '../utils/object.js'
+import type { FastifyError, FastifyInstance } from 'fastify'
+import { AppError, UpstreamError } from '../platform/errors.js'
 import playlistRoutes from './playlists.js'
-import sessionRoutes from './session.js'
-import radioOptionsRoutes from './radio-options.js'
 import radioAudioRoutes from './radio-audio.js'
 import radioImpactsRoutes from './radio-impacts.js'
+import radioLyricRoutes from './radio-lyric.js'
+import radioOptionsRoutes from './radio-options.js'
+import sessionRoutes from './session.js'
 
-const errorMessages: Record<number, string> = {
-	401: '网易云登录已失效，请重新扫码',
-	403: '网易云拒绝访问该资源',
-	404: '用户或歌单不存在',
-	500: '电台服务内部错误',
-	502: '网易云请求失败，请稍后重试'
+// 全项目唯一的 HTTP 错误映射，业务只抛 AppError，适配层只抛 UpstreamError
+function toResponse(error: unknown) {
+	if (error instanceof AppError) return { status: error.status, code: error.code, message: error.message }
+	if (error instanceof UpstreamError) {
+		const status = error.kind === 'expired' ? 401 : error.kind === 'forbidden' ? 403 : 502
+		const message = error.kind === 'expired' ? '网易云登录已失效，请重新扫码' : error.kind === 'forbidden' ? '网易云拒绝访问该资源' : '网易云请求失败，请稍后重试'
+		return { status, code: status, message }
+	}
+	return null
 }
 
 export default async function indexRoutes(fastify: FastifyInstance) {
 	fastify.addHook('onRequest', async (_request, reply) => {
 		reply.header('Cache-Control', 'private, no-store')
 	})
-	fastify.setErrorHandler((error, request, reply) => {
-		if (isRecord(error) && error.validation) return reply.code(400).send({ code: 400, message: '请求参数不合法' })
-		if (error instanceof ApiError) return reply.code(error.statusCode).send({ code: error.code, message: error.message })
-		const body = isRecord(error) && isRecord(error.body) ? error.body : undefined
-		const nativeStatus = isRecord(error) && typeof error.statusCode === 'number' ? error.statusCode : body ? 502 : 500
-		const code = typeof body?.code === 'number' && Number.isInteger(body.code) ? body.code : nativeStatus
-		const statusCode = code === 301 ? 401 : code >= 400 && code < 500 ? code : nativeStatus
-		const status = Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 500
-		request.log.warn({ code, statusCode: status }, '电台接口请求失败')
-		return reply.code(status).send({ code, message: errorMessages[status] || '请求失败' })
+	fastify.setErrorHandler((error: FastifyError, request, reply) => {
+		const mapped = toResponse(error)
+		if (mapped) return reply.code(mapped.status).send({ code: mapped.code, message: mapped.message })
+		if (error.validation) return reply.code(400).send({ code: 400, message: '请求参数不合法' })
+		// 限流插件自带 429，保留它的提示和状态
+		if (error.statusCode === 429) return reply.code(429).send({ code: 429, message: error.message })
+		request.log.warn({ err: error }, '电台接口请求失败')
+		return reply.code(500).send({ code: 500, message: '电台服务内部错误' })
 	})
 
 	await fastify.register(playlistRoutes)
@@ -36,4 +37,5 @@ export default async function indexRoutes(fastify: FastifyInstance) {
 	await fastify.register(radioOptionsRoutes)
 	await fastify.register(radioAudioRoutes)
 	await fastify.register(radioImpactsRoutes)
+	await fastify.register(radioLyricRoutes)
 }
