@@ -1,1 +1,1 @@
-export { getRoamingSongs, publishRoamingSongs, scheduleRoamingSync, songsEvents, waitForRoamingSync, type ManualRoamingSync } from './sync.js'
+export { getRoamingSongs, isRoamingSyncing, publishRoamingSongs, scheduleRoamingSync, songsEvents, waitForRoamingSync, type ManualRoamingSync } from './sync.js'

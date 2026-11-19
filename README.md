@@ -70,7 +70,7 @@ Next.js 前端（3003）
   ▼
 Fastify 服务端（4003）
   ├─ modules/*        业务：会话、漫游、播放、设置
-  ├─ audio/           音频黑盒：下载 → ffmpeg → Worker 分析 → 时间轴入库
+  ├─ audio/           音频：下载 → ffmpeg → Worker 分析 → 时间轴入库
   ├─ platform/*       MySQL、网易云适配、Cookie、加密
   ├─ vendor/ncm-api   本地网易云接口模块（只读）
   └─ MySQL
@@ -80,14 +80,22 @@ Fastify 服务端（4003）
 
 ## 技术栈
 
-| 层级 | 技术 |
+| 层级 | 技术 / 库 |
 | --- | --- |
-| 前端 | Next.js 16、React 19、TypeScript、Tailwind CSS 4、Radix UI |
-| 视觉 | Canvas、Web Animations、Framer Motion |
-| 服务端 | Node.js、Fastify 5、TypeScript、Drizzle ORM、MySQL |
-| 实时 | WebSocket（`ws`） |
-| 音频分析 | ffmpeg-static、Essentia.js、Worker Threads |
-| 启动与进程 | pnpm、tsx、PM2 |
+| 前端框架 | Next.js 16（Turbopack）、React 19、TypeScript |
+| 样式与 UI | Tailwind CSS 4、shadcn/ui 结构、Radix UI（Context Menu / Dialog / Switch）、Lucide、clsx、tailwind-merge、Sonner |
+| 动画与视觉 | Framer Motion、GSAP（BlurText）、Web Animations API、Canvas 2D、Web Audio API |
+| WebGPU | vgpu（vercel-labs）、AeroShards 着色器（副歌碎片层） |
+| 服务端 | Fastify 5、@fastify/cookie、@fastify/express、@fastify/rate-limit、cookie、set-cookie-parser |
+| 实时通信 | WebSocket（`ws`） |
+| 数据库 | MySQL、mysql2、Drizzle ORM、drizzle-kit |
+| 音频分析 | ffmpeg-static、Essentia.js、Worker Threads、execa |
+| 网易云接口 | NeteaseCloudMusicApiEnhanced（`@NeteaseCloudMusicApiEnhanced/api-enhanced`，仓库内以 `@neteasecloudmusicapienhanced/api` v4.41.1 内置）、`@neteasecloudmusicapienhanced/unblockmusic-utils` |
+| 协议与校验 | `@neon-radio/protocol`（workspace）、zod |
+| 构建与开发 | TypeScript（前端 6.x / 服务端 5.x）、PostCSS、Tailwind PostCSS、Drizzle Kit |
+| 启动与进程 | pnpm、tsx、concurrently、PM2 |
+
+内置 ncm-api 还会用到以下库（业务代码不直接依赖）：axios、crypto-js、node-forge、jsdom、qrcode、xml2js、fzstd、music-metadata、express、express-fileupload、pac-proxy-agent、tunnel、safe-decode-uri-component。
 
 ## 项目结构
 
@@ -103,3 +111,13 @@ neon-radio/
 ```
 
 入口层（`routes` / `live`）只做校验和转发，业务层不写 SQL，工具层承担数据库与第三方适配；依赖只能向下。音频黑盒对外只暴露各自的 `index.ts`。
+
+## 第三方资源与致谢
+
+- **网易云接口**：基于 [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced) 的 `@NeteaseCloudMusicApiEnhanced/api-enhanced`（仓库内以 `@neteasecloudmusicapienhanced/api` v4.41.1 内置）与 `@neteasecloudmusicapienhanced/unblockmusic-utils`。仅用于个人电台，请遵守网易云音乐服务条款。
+- **文字动画**：`BlurText` 来自 React Bytes。
+- **界面组件**：`DraggableGrid` / `TiltedCard` 来自 Originkit，位于 `frontend/src/components/vendor/originkit`。
+- **WebGPU 视觉**：`AeroShards` 场景基于 [vgpu](https://github.com/vercel-labs/vgpu) 与项目作者提供的着色器。
+- **背景视频**：**“Synth City by Visualdon - 4K 60fps”**，作者 **VISUALDON**，来自 Wallpaper Engine。视频版权归原作者所有，仓库内的 `frontend/public/videos/loop.webm` 仅供本项目演示；公开分发或商用前请自行取得授权，或替换为自己的素材。
+- **图标与基础组件**：Lucide、Radix UI、shadcn/ui。
+

@@ -3,22 +3,35 @@ import { getSessionStatus, hasBrowserSession, hasPendingQr } from '../modules/se
 import { clearBrowserToken, readRequestToken } from '../platform/http/cookie.js'
 import { normalizeRequestPath } from '../platform/http/path.js'
 
-const publicPaths = new Set([
+// 无需管理员会话的精确路径
+const publicPaths = [
 	'/neon-radio/login',
 	'/neon-radio/login-qr',
 	'/neon-radio/ncm/login/qr/key',
 	'/neon-radio/ncm/login/qr/create',
 	'/neon-radio/ncm/login/qr/check'
-])
+]
 
-// 业务接口要求管理员会话；扫码与音源取链保持公开
+// 无需管理员会话的路径前缀
+const publicPrefixes = ['/neon-radio/login-qr/']
+
+// 公开 GET 的媒体与时间轴目录，具体歌曲由业务服务校验
+const publicGetPrefixes = [
+	'/neon-radio/radio-audio/',
+	'/neon-radio/radio-lyric/',
+	'/neon-radio/radio-chorus/',
+	'/neon-radio/radio-impacts/'
+]
+
+// 业务接口要求管理员会话；扫码和公开媒体目录直接放行
 export default async function browserAuth(request: FastifyRequest, reply: FastifyReply) {
 	const path = normalizeRequestPath(request.url)
 	if (!path) return reply.code(400).send({ code: 400, message: '请求路径不合法' })
-	// 音源和歌词目录只公开 GET，具体歌曲由业务服务校验
-	const publicAudio =
-		request.method === 'GET' && (path.startsWith('/neon-radio/radio-audio/') || path.startsWith('/neon-radio/radio-lyric/'))
-	if (!path.startsWith('/neon-radio/') || publicPaths.has(path) || path.startsWith('/neon-radio/login-qr/') || publicAudio) return
+	const isPublic =
+		publicPaths.includes(path) ||
+		publicPrefixes.some(prefix => path.startsWith(prefix)) ||
+		(request.method === 'GET' && publicGetPrefixes.some(prefix => path.startsWith(prefix)))
+	if (!path.startsWith('/neon-radio/') || isPublic) return
 
 	reply.header('Cache-Control', 'private, no-store')
 	try {

@@ -32,6 +32,8 @@ export interface DraggableGridProps {
 	placeholderColor?: string
 	onItemClick?: (item: GridItem, index: number) => void
 	initialItemId?: string | null
+	focusItemId?: string | null
+	focusRequest?: number
 	activeItemId?: string | null
 	active?: boolean
 	style?: CSSProperties
@@ -167,6 +169,8 @@ export default function DraggableGrid({
 	placeholderColor = '#1a1a1f',
 	onItemClick,
 	initialItemId,
+	focusItemId,
+	focusRequest = 0,
 	activeItemId,
 	active = true,
 	style
@@ -256,6 +260,38 @@ export default function DraggableGrid({
 		safeImageWidth,
 		safeImageHeight,
 		safeGap,
+		dragControls,
+		stopMotion,
+		x,
+		y
+	])
+
+	// 搜索定位：只移动网格并居中目标，不重置图片加载状态
+	useLayoutEffect(() => {
+		if (!focusItemId || containerSize.w <= 0 || containerSize.h <= 0) return
+		const index = safeItems.findIndex(item => item.id === focusItemId)
+		if (index < 0) return
+		const column = index % blockColumns
+		const row = Math.floor(index / blockColumns)
+		dragControls.cancel()
+		stopMotion()
+		hasMoved.current = false
+		setIsDragging(false)
+		const duration = 0.35
+		const ease = [0.22, 1, 0.36, 1] as const
+		animate(x, containerSize.w / 2 - column * cellWidth - safeImageWidth / 2, { duration, ease })
+		animate(y, containerSize.h / 2 - row * cellHeight - safeImageHeight / 2, { duration, ease })
+	}, [
+		focusItemId,
+		focusRequest,
+		safeItems,
+		containerSize.w,
+		containerSize.h,
+		blockColumns,
+		cellWidth,
+		cellHeight,
+		safeImageWidth,
+		safeImageHeight,
 		dragControls,
 		stopMotion,
 		x,

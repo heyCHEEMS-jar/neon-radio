@@ -8,6 +8,20 @@
       "when": 1795077710114,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1795098554522,
+      "tag": "0001_chorus",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1795100083504,
+      "tag": "0002_lyric",
+      "breakpoints": true
     }
   ]
 }

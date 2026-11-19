@@ -21,7 +21,7 @@ export default function SongTitle({ song }: { song: RadioSong | null }) {
 	const artists = song.artists.join(' / ')
 
 	return (
-		<div className="pointer-events-none absolute inset-x-0 top-[clamp(28px,9svh,96px)] z-10 flex flex-col items-center gap-1 px-4 text-center">
+		<div className="pointer-events-none absolute inset-x-0 top-[clamp(44px,15svh,168px)] z-10 flex flex-col items-center gap-1 px-4 text-center">
 			<BlurText
 				key={`${song.id}-name-${revision}`}
 				text={song.name}
@@ -32,8 +32,8 @@ export default function SongTitle({ song }: { song: RadioSong | null }) {
 				duration={0.8}
 				wordDelay={0.12}
 				color="#ffffff"
-				fontSize="text-[clamp(22px,3.8vw,52px)]"
-				className="w-full max-w-[min(92vw,900px)] font-mono [text-shadow:0_4px_24px_rgba(0,0,0,0.65)]"
+				fontSize="text-[clamp(30px,6vw,56px)]"
+				className="w-full max-w-[min(92vw,900px)] font-mono opacity-85 [text-shadow:0_4px_24px_rgba(0,0,0,0.65)]"
 			/>
 			{artists && (
 				<BlurText
@@ -46,8 +46,8 @@ export default function SongTitle({ song }: { song: RadioSong | null }) {
 					duration={0.6}
 					wordDelay={0.08}
 					color="#ffffff"
-					fontSize="text-[clamp(11px,1.5vw,16px)]"
-					className="w-full max-w-[min(92vw,900px)] font-mono opacity-70 [text-shadow:0_2px_14px_rgba(0,0,0,0.7)]"
+					fontSize="text-[clamp(15px,2.4vw,19px)]"
+					className="w-full max-w-[min(92vw,900px)] font-mono opacity-55 [text-shadow:0_2px_14px_rgba(0,0,0,0.7)]"
 				/>
 			)}
 		</div>

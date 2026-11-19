@@ -103,7 +103,7 @@ export default function Player({ visible }: { visible: boolean }) {
 		<>
 			{!audio.started && <div className="fixed inset-0 z-30 bg-black/10 backdrop-blur-md" aria-hidden="true" />}
 			<div
-				className="fixed left-1/2 z-40 flex h-10 w-[min(80vw,272px)] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-white/25 bg-neutral-950/90 px-2.5 text-white shadow-xl transition-[top] duration-700 ease-out motion-reduce:transition-none"
+				className="fixed left-1/2 z-40 flex h-10 w-[min(80vw,272px)] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full border border-white/25 bg-neutral-950/35 px-2.5 text-white shadow-xl md:opacity-40 md:hover:opacity-100 [transition:top_700ms_ease-out,opacity_200ms_ease-out] motion-reduce:transition-none"
 				style={{ top: audio.started ? 'calc(100svh - 72px - env(safe-area-inset-bottom))' : '50svh' }}
 			>
 				<button

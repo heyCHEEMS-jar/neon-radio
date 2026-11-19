@@ -26,6 +26,10 @@
 - `AUDIO_ANALYSIS_VERSION` 变更等于全量重算，必须说明影响。
 - 黑盒外的代码不得出现 ffmpeg、Worker、PCM、Essentia、AnalyserNode、频谱采样。
 
+## 前端约定
+
+- 所有 `*.module.css` 统一放在 `frontend/src/styles/`，组件通过 `@/styles/*.module.css` 引入。
+
 ## 不做的事
 
 - 不修改 `server/vendor/ncm-api`。

@@ -36,8 +36,8 @@ function readSong(value: unknown): RoamingSong {
 	return { id: readId(value.id), name: value.name.trim(), artists, data: value }
 }
 
-// 按批交付歌曲，分页、响应校验和并发上限留在适配层
-export async function fetchRoamingSongs(uid: string, cookie: string, onSongs: (songs: readonly RoamingSong[]) => void) {
+// 读取全部歌单成员，返回去重后的歌曲 ID（保持首次出现顺序）
+export async function fetchRoamingSongIds(uid: string, cookie: string) {
 	const playlistIds = new Set<string>()
 	// 按 more 分页读取创建及收藏的全部歌单，不只取首屏
 	for (let offset = 0; ; offset += playlistPageSize) {
@@ -76,9 +76,12 @@ export async function fetchRoamingSongs(uid: string, cookie: string, onSongs: (s
 			for (const id of result.value) songIds.add(id)
 		}
 	}
+	return { playlistCount: playlists.length, ids: Array.from(songIds) }
+}
 
-	const ids = Array.from(songIds)
-	// 歌曲详情分批读取，每次不超过接口允许的 1000 首
+// 按 ID 批量读取歌曲详情，供增量同步只补齐缺失的歌曲
+export async function fetchSongDetails(ids: readonly string[], cookie: string): Promise<RoamingSong[]> {
+	const details: RoamingSong[] = []
 	for (let offset = 0; offset < ids.length; offset += songPageSize * concurrency) {
 		const batches: string[][] = []
 		for (let index = offset; index < Math.min(offset + songPageSize * concurrency, ids.length); index += songPageSize) {
@@ -88,16 +91,16 @@ export async function fetchRoamingSongs(uid: string, cookie: string, onSongs: (s
 			batches.map(async batch => {
 				const body = requireOk(await ncmApi.song_detail({ ...ncmOptions, ids: batch.join(','), cookie }), '网易云返回的歌曲详情异常').body
 				if (!Array.isArray(body.songs)) throw invalid('网易云返回的歌曲详情异常')
-				const details = body.songs.map(readSong)
-				const returnedIds = new Set(details.map(song => song.id))
+				const items = body.songs.map(readSong)
+				const returnedIds = new Set(items.map(song => song.id))
 				if (batch.some(id => !returnedIds.has(id))) throw invalid('网易云未返回全部歌曲详情，取消本次同步')
-				return details
+				return items
 			})
 		)
 		for (const result of results) {
 			if (result.status === 'rejected') throw result.reason
-			onSongs(result.value)
+			details.push(...result.value)
 		}
 	}
-	return { playlistCount: playlists.length, trackCount: ids.length }
+	return details
 }

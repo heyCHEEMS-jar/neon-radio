@@ -1,10 +1,10 @@
 export const visualizerConfig = {
 	coverSrc: '/images/thumb_music.webp',
-	coverClassName: 'w-[52%]',
+	coverClassName: 'w-[60%] md:w-[48%]',
 	scene: {
-		scale: 1.04, // 固定放大，为位移和旋转留出边缘余量
-		offset: 2, // 最大偏移，单位 px
-		rotation: 0.2 // 最大旋转角度，单位度
+		scale: 1.06, // 固定放大，为位移和旋转留出边缘余量
+		offset: 16, // 最大偏移，单位 px；窄屏会按屏幕宽度收窄
+		rotation: 0.35 // 最大旋转角度，单位度
 	},
 	camera: {
 		scale: 1.2, // 封面固定缩放
@@ -22,9 +22,9 @@ export const visualizerConfig = {
 		mediumStrength: 0.5,
 		highStrength: 0.65, // 相对该曲最高冲击强度的比例，仅用于动画分档
 		levels: {
-			low: { offset: 1, scale: 0.002, centerScale: 0.008, centerRecoil: 0.003, duration: 220 },
-			medium: { offset: 1.5, scale: 0.005, centerScale: 0.018, centerRecoil: 0.006, duration: 320 },
-			high: { offset: 3.5, scale: 0.01, centerScale: 0.032, centerRecoil: 0.01, duration: 440 }
+			low: { offset: 2, centerScale: 0.032, centerRecoil: 0.006, duration: 480 },
+			medium: { offset: 3, centerScale: 0.072, centerRecoil: 0.012, duration: 700 },
+			high: { offset: 7, centerScale: 0.128, centerRecoil: 0.02, duration: 960 }
 		}
 	},
 	ring: {

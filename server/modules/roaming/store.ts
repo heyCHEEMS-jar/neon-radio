@@ -45,3 +45,14 @@ export async function readRoamingSongs(uid: string): Promise<RadioSong[]> {
 		.orderBy(asc(roamingSongs.sortOrder))
 	return rows.map(({ song }) => toRadioSong(song))
 }
+
+// 读取全部已入库的原始歌曲详情，按歌曲 ID 建索引
+export async function readRoamingSongDetails(uid: string) {
+	const rows = await db.select({ song: roamingSongs.song }).from(roamingSongs).where(eq(roamingSongs.neteaseUid, uid))
+	const details = new Map<string, Record<string, unknown>>()
+	for (const { song } of rows) {
+		const id = typeof song.id === 'string' || typeof song.id === 'number' ? String(song.id) : ''
+		if (id) details.set(id, song)
+	}
+	return details
+}

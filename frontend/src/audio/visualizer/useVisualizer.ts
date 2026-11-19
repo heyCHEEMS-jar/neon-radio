@@ -2,6 +2,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, type RefObject } from '
 import type { AudioImpact } from '@neon-radio/protocol'
 import { RadioAudioContext } from '../context'
 import { visualizerConfig as config } from './config'
+import { isSceneMotionEnabled } from './motion'
 import { createSpectrumCurve, createSpectrumSampler } from './spectrum'
 
 interface Drawing {
@@ -66,14 +67,7 @@ export function useVisualizer(active = true, sceneRef: RefObject<HTMLDivElement 
 		let views: View[] = []
 		let coverWidth = 0
 		const settings = config.shake
-		let shakeAnimation: Animation | null = null
 		let centerAnimation: Animation | null = null
-		const shakeFrames: Keyframe[] = [
-			{ transform: 'translate3d(0, 0, 0) scale(1)', offset: 0 },
-			{ offset: 0.15 },
-			{ offset: 0.5 },
-			{ transform: 'translate3d(0, 0, 0) scale(1)', offset: 1 }
-		]
 		const centerFrames: Keyframe[] = [
 			{ transform: 'scale(1)', offset: 0 },
 			{ offset: 0.15 },
@@ -94,32 +88,35 @@ export function useVisualizer(active = true, sceneRef: RefObject<HTMLDivElement 
 			image.style.transform = `rotate(${rotation}deg) scale(${config.camera.scale})`
 		}
 
-		// 场景位移用两个低频正弦叠加，避免机械摆动
+		// 场景位移用三条不同频率的正弦叠加，形成不重复的随机摇晃
 		const sceneMotion = Array.from({ length: 3 }, () => {
-			const phases = Array.from({ length: 2 }, () => Math.random() * Math.PI * 2)
-			const frequencies = [0.35 + Math.random() * 0.08, 0.13 + Math.random() * 0.05]
-			return (time: number) => Math.sin(time * frequencies[0] + phases[0]) * 0.7 + Math.sin(time * frequencies[1] + phases[1]) * 0.3
+			const phases = Array.from({ length: 3 }, () => Math.random() * Math.PI * 2)
+			const frequencies = [1.1 + Math.random() * 0.3, 0.45 + Math.random() * 0.12, 0.16 + Math.random() * 0.06]
+			return (time: number) =>
+				Math.sin(time * frequencies[0] + phases[0]) * 0.6 +
+				Math.sin(time * frequencies[1] + phases[1]) * 0.3 +
+				Math.sin(time * frequencies[2] + phases[2]) * 0.1
 		})
 
 		// 场景层只做小幅位移和旋转，固定缩放保证旋转时不露出边缘
 		const moveScene = () => {
 			if (!scene) return
 			const scale = config.scene.scale
-			if (reducedMotion.matches || !activeRef.current) {
+			if (reducedMotion.matches || !activeRef.current || !isSceneMotionEnabled()) {
 				scene.style.transform = `scale(${scale})`
 				return
 			}
-			const x = sceneMotion[0](elapsed) * config.scene.offset
-			const y = sceneMotion[1](elapsed) * config.scene.offset
+			// 窄屏按宽度限制幅度，避免位移超出固定缩放留出的边缘余量
+			const offset = Math.min(config.scene.offset, window.innerWidth / 40)
+			const x = sceneMotion[0](elapsed) * offset
+			const y = sceneMotion[1](elapsed) * offset
 			const rotation = sceneMotion[2](elapsed) * config.scene.rotation
 			scene.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg) scale(${scale})`
 		}
 
 		// 暂停、换曲或场景恢复时停止旧冲击，并重新定位事件游标
 		const resetShake = () => {
-			shakeAnimation?.cancel()
 			centerAnimation?.cancel()
-			shakeAnimation = null
 			centerAnimation = null
 			impactPlaybackId = null
 			impactPoints = null
@@ -127,16 +124,14 @@ export function useVisualizer(active = true, sceneRef: RefObject<HTMLDivElement 
 			impactIndex = 0
 		}
 
-		// 时间轴已决定触发点，中央区域按相对强度播放三档冲击
+		// 时间轴已决定触发点，中央列按相对强度播放三档冲击，左右信息栏保持静止
 		const triggerImpact = (strength: number) => {
 			let level: keyof typeof settings.levels = 'low'
 			if (strength >= settings.highStrength) level = 'high'
 			else if (strength >= settings.mediumStrength) level = 'medium'
 			const stage = settings.levels[level]
 			// 密集鼓点从当前姿态接续，避免取消旧动画时瞬间跳回原位
-			shakeFrames[0].transform =
-				shakeAnimation?.playState === 'running' ? window.getComputedStyle(visuals).transform : 'translate3d(0, 0, 0) scale(1)'
-			centerFrames[0].transform = centerAnimation?.playState === 'running' ? window.getComputedStyle(center).transform : 'scale(1)'
+			centerFrames[0].transform = centerAnimation?.playState === 'running' ? window.getComputedStyle(center).transform : 'translate3d(0, 0, 0) scale(1)'
 			const impact = 0.6 + strength * 0.4
 			const amplitude = Math.min(stage.offset, maxShakeOffset) * impact
 			// 连续冲击沿上一次方向小幅偏转，避免每拍随机跳向另一侧
@@ -145,22 +140,10 @@ export function useVisualizer(active = true, sceneRef: RefObject<HTMLDivElement 
 			const x = Math.cos(angle) * amplitude
 			const y = Math.sin(angle) * amplitude
 			const recoil = -(0.35 + Math.random() * 0.25)
-			shakeFrames[1].offset = 0.15
-			shakeFrames[2].offset = 0.5
-			if (level !== 'low') {
-				shakeFrames[1].offset = level === 'high' ? 0.08 : 0.11
-				shakeFrames[2].offset = level === 'high' ? 0.32 : 0.4
-			}
-			shakeFrames[1].transform = `translate3d(${x}px, ${y}px, 0) scale(${1 + stage.scale * impact})`
-			shakeFrames[2].transform = `translate3d(${x * recoil}px, ${y * recoil}px, 0) scale(1)`
-			shakeAnimation?.cancel()
-			shakeAnimation = visuals.animate(shakeFrames, { duration: stage.duration, easing: 'linear' })
-
-			// 中央封面与圆环使用独立缩放，保持同一次冲击的鼓起与回缩
-			centerFrames[1].offset = shakeFrames[1].offset
-			centerFrames[2].offset = level === 'high' ? 0.38 : shakeFrames[2].offset
-			centerFrames[1].transform = `scale(${1 + stage.centerScale * impact})`
-			centerFrames[2].transform = `scale(${1 - stage.centerRecoil * impact})`
+			centerFrames[1].offset = level === 'high' ? 0.08 : level === 'medium' ? 0.11 : 0.15
+			centerFrames[2].offset = level === 'high' ? 0.32 : level === 'medium' ? 0.4 : 0.5
+			centerFrames[1].transform = `translate3d(${x}px, ${y}px, 0) scale(${1 + stage.centerScale * impact})`
+			centerFrames[2].transform = `translate3d(${x * recoil}px, ${y * recoil}px, 0) scale(${1 - stage.centerRecoil * impact})`
 			centerAnimation?.cancel()
 			centerAnimation = center.animate(centerFrames, { duration: stage.duration, easing: 'linear' })
 		}

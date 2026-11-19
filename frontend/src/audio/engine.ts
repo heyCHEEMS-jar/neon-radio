@@ -27,7 +27,8 @@ export function createAnalyser(audio: HTMLAudioElement) {
 	const analyser = context.createAnalyser()
 	const source = context.createMediaElementSource(audio)
 	const gain = context.createGain()
-	gain.gain.value = 0.4
+	// 默认音量偏高，压低整体输出，避免首次播放过大
+	gain.gain.value = 0.2
 	// 这些参数只影响可视化，不改变播放频率范围或音质
 	analyser.fftSize = config.bufferSize * 2
 	analyser.smoothingTimeConstant = config.spectrum.smoothingTimeConstant

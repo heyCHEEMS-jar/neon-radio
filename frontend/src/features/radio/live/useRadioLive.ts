@@ -1,6 +1,6 @@
 'use client'
 
-import type { LiveEvent, NeteaseSyncState, PlaybackOrder, PlaybackSnapshot, PlaybackState, RadioOptions, RadioSong } from '@neon-radio/protocol'
+import type { LiveEvent, NeteaseSyncState, PlaybackOrder, PlaybackSnapshot, PlaybackState, RadioListeners, RadioOptions, RadioSong } from '@neon-radio/protocol'
 import { createContext, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { appendHistory, moveHistory, type HistoryAction, type PlaybackHistory } from './history'
@@ -17,6 +17,7 @@ export interface RadioLiveState {
 	playback: PlaybackState | null
 	playbackPending: boolean
 	impactsRevision: number
+	listeners: RadioListeners | null
 	neteaseSync: NeteaseSyncState | null
 	syncPending: boolean
 	successfulSyncId: string | null
@@ -76,6 +77,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 	const [history, setHistory] = useState<PlaybackHistory>({ songIds: [], cur: -1 }) // 本页播放历史，不随模式切换或重连清空
 	const [playbackPending, setPlaybackPending] = useState(false) // 是否有尚未确认的播放操作
 	const [impactsRevision, setImpactsRevision] = useState(0) // 当前歌曲的分析完成后重新拉取时间轴
+	const [listeners, setListeners] = useState<RadioListeners | null>(null) // 服务端统计的在线人数和每首在听人数
 	const [neteaseSync, setNeteaseSync] = useState<NeteaseSyncState | null>(null) // 网易云数据刷新任务的状态
 	const [syncPending, setSyncPending] = useState(false) // 网易云刷新请求是否尚未确认
 	const [successfulSyncId, setSuccessfulSyncId] = useState<string | null>(null) // 最近成功的数据刷新任务
@@ -176,16 +178,32 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		setHistory(next)
 	}, [])
 
-	// 首次真正播放时记录当前歌，未点击播放前的主线快照不算播放历史
+	// 首次真正播放时记录当前歌，并把本页真实播放状态上报给服务端统计人数
 	useEffect(() => {
 		const audio = audioRef.current
 		if (!audio) return
+		// 浏览器的 playing/pause 事件是唯一依据，暂停和切歌都会重新上报
+		const report = (playing: boolean) => {
+			const socket = socketRef.current
+			if (!socket || socket.readyState !== WebSocket.OPEN) return
+			try {
+				socket.send(JSON.stringify({ type: 'presence', playing }))
+			} catch {
+				// 断线后由重连的 onopen 重新上报
+			}
+		}
 		const onPlaying = () => {
 			const current = playbackRef.current
 			if (historyRef.current.cur < 0 && current?.song && audio.dataset.playbackId === current.playbackId) updateHistory(current.song.id)
+			report(true)
 		}
+		const onPause = () => report(false)
 		audio.addEventListener('playing', onPlaying)
-		return () => audio.removeEventListener('playing', onPlaying)
+		audio.addEventListener('pause', onPause)
+		return () => {
+			audio.removeEventListener('playing', onPlaying)
+			audio.removeEventListener('pause', onPause)
+		}
 	}, [audioRef, updateHistory])
 
 	// 应用确认的播放状态，再更新共用历史；重连、拖动和同歌曲快照不重复追加
@@ -291,6 +309,12 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				if (stopped || socketRef.current !== current) return
 				// 重连补拉时间轴，避免错过断线期间的分析完成通知
 				setImpactsRevision(value => value + 1)
+				// 重连后重新上报真实播放状态，服务端已把本连接当作未播放
+				try {
+					current.send(JSON.stringify({ type: 'presence', playing: Boolean(audioRef.current && !audioRef.current.paused) }))
+				} catch {
+					// 发送失败由连接关闭流程重试
+				}
 				const previous = getCurrentPlayback() // 断线恢复使用真实歌曲位置和暂停状态
 				if (
 					awaitingMainRef.current ||
@@ -331,6 +355,8 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						if (!roamingOpenRef.current || firstSnapshot) setSongs(songs)
 					} else if (message.type === 'radio-impacts-ready') {
 						if (message.data === playbackRef.current?.song?.id) setImpactsRevision(value => value + 1)
+					} else if (message.type === 'radio-listeners') {
+						setListeners(message.data)
 					} else if (message.type === 'playback-state') {
 						const next = toPlaybackState(message.data)
 						// 请求未确认时暂存；已受理主线操作后允许离开旧本地状态
@@ -476,7 +502,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		return requestLocalSong(songId, current.cur - 1)
 	}, [requestLocalSong])
 
-	// 自动续播遵循单曲循环，手动下一首重新选歌而不前进历史；true 为已确认，false 为未受理
+	// 先沿已回退的历史前进，走到末尾才重新选歌；true 为已确认，false 为未受理
 	const playNext = useCallback(
 		(manual = false) => {
 			const current = playbackRef.current
@@ -485,6 +511,17 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				return Promise.resolve(false)
 			if (!manual && current.mode !== 'local') return Promise.resolve(false)
 
+			// 退到历史中间时下一首回到记录里的后一首，和上一首互相对应；歌曲已下线则直接重新选歌
+			const history = historyRef.current
+			const forwardId = history.songIds[history.cur + 1]
+			if (
+				current.mode === 'local' &&
+				forwardId &&
+				latestSongsRef.current?.some(song => song.id === forwardId && Number.isFinite(song.durationMs) && song.durationMs > 0)
+			) {
+				return requestLocalSong(forwardId, history.cur + 1)
+			}
+
 			// 选歌规则只在服务端实现，游客只上送自己的本地顺序
 			return startPlaybackRequest(
 				socket,
@@ -492,7 +529,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				{ historyAction: 'append' }
 			)
 		},
-		[authenticated, localPlaybackOrder, startPlaybackRequest]
+		[authenticated, localPlaybackOrder, requestLocalSong, startPlaybackRequest]
 	)
 
 	// 手动暂停脱离主线，只冻结当前歌曲；这不是游客自行选歌或拖动
@@ -588,6 +625,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		playback,
 		playbackPending,
 		impactsRevision,
+		listeners,
 		neteaseSync,
 		syncPending,
 		successfulSyncId,

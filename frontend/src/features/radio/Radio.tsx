@@ -2,12 +2,13 @@
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Toaster } from 'sonner'
-import { RadioAudioContext } from '@/audio'
+import { RadioAudioContext, sceneMotionStorageKey, setSceneMotionEnabled } from '@/audio'
 import useRadioAudio from '@/audio/useRadioAudio'
 import { visualizerConfig } from '@/audio/visualizer/config'
 import useRadioLive, { RadioLiveContext } from '@/features/radio/live/useRadioLive'
-import { RadioSceneContext, SceneRefContext } from './scene'
+import { RadioSceneContext, RoamingContext, SceneRefContext } from './scene'
 import Lyrics from './components/Lyrics'
+import Listeners from './components/Listeners'
 import Player from './components/Player'
 import type { RoamingProps } from './components/Roaming'
 
@@ -39,6 +40,22 @@ export default function Radio({ children }: { children: ReactNode }) {
 	const rootRef = useRef<HTMLDivElement>(null) // 漫游关闭后归还键盘焦点
 	const sceneRef = useRef<HTMLDivElement>(null) // 背景与可视化的共同场景层
 	const wasRoaming = useRef(false) // 判断本次是否刚从漫游退出
+
+	// 恢复浏览器端的场景晃动偏好；只有显式保存为 off 时才关闭
+	useEffect(() => {
+		try {
+			setSceneMotionEnabled(localStorage.getItem(sceneMotionStorageKey) !== 'off')
+		} catch {
+			// 浏览器禁用存储时保持默认开启
+		}
+	}, [])
+
+	// 漫游对话框关闭后触发一次场景重排，避免顶层 modal 退出时合成层残留
+	useEffect(() => {
+		if (roaming) return
+		const frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+		return () => cancelAnimationFrame(frame)
+	}, [roaming])
 
 	// 主界面恢复可见后再交还焦点
 	useLayoutEffect(() => {
@@ -90,22 +107,22 @@ export default function Radio({ children }: { children: ReactNode }) {
 					}}
 				>
 					<RadioSceneContext.Provider value={!roaming && audio.playing}>
-						<SceneRefContext.Provider value={sceneRef}>
-							<div
-								ref={sceneRef}
-								className="fixed inset-0 will-change-transform"
-								style={{
-									visibility: roamingPhase === 'open' ? 'hidden' : 'visible',
-									transform: `scale(${visualizerConfig.scene.scale})`
-								}}
-							>
-								{children}
-							</div>
-						</SceneRefContext.Provider>
+						<RoamingContext.Provider value={roaming}>
+							<SceneRefContext.Provider value={sceneRef}>
+								<div
+									ref={sceneRef}
+									className="fixed inset-0 will-change-transform"
+									style={{ transform: `scale(${visualizerConfig.scene.scale})` }}
+								>
+									{children}
+								</div>
+							</SceneRefContext.Provider>
+						</RoamingContext.Provider>
 					</RadioSceneContext.Provider>
 				</div>
 				<Player visible={!roaming} />
 				<Lyrics visible={!roaming} />
+				<Listeners visible={!roaming && audio.started} />
 				<Suspense fallback={null}>
 					{menuPosition && <Menu position={menuPosition} onOpenRoaming={openRoaming} onRestoreFocus={() => rootRef.current?.focus()} />}
 				</Suspense>

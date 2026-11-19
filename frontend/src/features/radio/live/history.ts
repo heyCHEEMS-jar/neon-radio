@@ -3,12 +3,13 @@ export interface PlaybackHistory {
 	cur: number
 }
 
-// append 为去重追加，数字为回退到已有历史位置
+// append 为追加到当前游标之后，数字为回退到已有历史位置
 export type HistoryAction = 'append' | number
 
-// 新播放先按歌曲 ID 去重再追加
+// 重复播放当前歌不新增历史；播放其他歌时丢弃已回退之后的分支再追加
 export function appendHistory(current: PlaybackHistory, songId: string): PlaybackHistory {
-	const songIds = [...current.songIds.filter(id => id !== songId), songId]
+	if (current.songIds[current.cur] === songId) return current
+	const songIds = [...current.songIds.slice(0, current.cur + 1), songId]
 	return { songIds, cur: songIds.length - 1 }
 }
 

@@ -4,7 +4,9 @@ import { useContext, useEffect, useState } from 'react'
 import { RadioAudioContext, useVisualizer } from '@/audio'
 import { visualizerConfig as config } from '@/audio/visualizer/config'
 import { getPlaybackPosition, RadioLiveContext } from '@/features/radio/live/useRadioLive'
+import { useMediaQuery } from '@/lib/use-media-query'
 import { RadioSceneContext, SceneRefContext } from '@/features/radio/scene'
+import ChorusBackdrop from './ChorusBackdrop'
 import SongTitle from './SongTitle'
 
 const edgeClassName =
@@ -14,7 +16,7 @@ const infoClassName =
 	'min-w-0 translate-y-1/2 border-t-[clamp(1px,0.3vw,5px)] border-white/70 pt-[clamp(6px,0.8vw,12px)] text-center text-[clamp(10px,2.4vw,40px)] font-light text-[#e6cbd6] [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]'
 
 // 描边随中心容器宽度缩放，最细保留1px
-const frameClassName = 'absolute top-1/2 left-1/2 aspect-square w-[54%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
+const frameClassName = 'absolute top-1/2 left-1/2 aspect-square w-[64%] md:w-[50%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
 
 function formatTime(milliseconds: number) {
 	const seconds = Math.floor(milliseconds / 1000)
@@ -24,6 +26,7 @@ function formatTime(milliseconds: number) {
 export default function Visuals() {
 	const active = useContext(RadioSceneContext)
 	const sceneRef = useContext(SceneRefContext)
+	const isMobile = useMediaQuery('(max-width: 767px)')
 	const live = useContext(RadioLiveContext)
 	const audio = useContext(RadioAudioContext) // 展示媒体实际进度，暂停后不继续递增本页时间
 	const playback = live?.playback ?? null
@@ -49,19 +52,26 @@ export default function Visuals() {
 
 	return (
 		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化">
+			<ChorusBackdrop />
 			<canvas ref={topRef} className={`top-0 ${edgeClassName}`} aria-hidden="true" />
 			<SongTitle song={song} />
 
 			<div className="absolute top-1/2 w-full -translate-y-1/2">
 				<div
 					ref={visualsRef}
-					className="grid w-full origin-center grid-cols-[minmax(0,1fr)_min(44vw,64vmin,480px)_minmax(0,1fr)] items-center gap-[clamp(8px,2vw,32px)] px-[clamp(16px,3vw,48px)] will-change-transform"
+					className={
+						isMobile
+							? 'grid w-full grid-cols-1 items-center'
+							: 'grid w-full origin-center grid-cols-[minmax(0,1fr)_min(52vw,72vmin,560px)_minmax(0,1fr)] items-center gap-0.5 px-[clamp(6px,1vw,16px)] will-change-transform'
+					}
 				>
-					<div className={infoClassName}>
-						<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
-							{song?.name ?? '等待电台'}
-						</p>
-					</div>
+					{!isMobile && (
+						<div className={`${infoClassName} w-full max-w-[clamp(180px,30vw,560px)] justify-self-end -mr-[clamp(8px,5vw,100px)]`}>
+							<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
+								{song?.name ?? '等待电台'}
+							</p>
+						</div>
+					)}
 
 					<div ref={centerRef} className="relative aspect-square w-full origin-center will-change-transform @container">
 						<div
@@ -90,11 +100,13 @@ export default function Visuals() {
 						</div>
 					</div>
 
-					<div className={infoClassName}>
-						<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
-							{progress}
-						</p>
-					</div>
+					{!isMobile && (
+						<div className={`${infoClassName} w-full max-w-[clamp(180px,30vw,560px)] justify-self-start -ml-[clamp(8px,5vw,100px)]`}>
+							<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
+								{progress}
+							</p>
+						</div>
+					)}
 				</div>
 			</div>
 

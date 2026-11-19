@@ -63,7 +63,22 @@ The server creates the database, runs migrations, and restores the saved session
 
 ## Stack
 
-Next.js 16, React 19, TypeScript, Tailwind CSS 4, Fastify 5, Drizzle ORM, MySQL, WebSocket, ffmpeg-static, Essentia.js, PM2.
+| Layer | Libraries |
+| --- | --- |
+| Frontend | Next.js 16 (Turbopack), React 19, TypeScript |
+| UI and styling | Tailwind CSS 4, shadcn/ui structure, Radix UI, Lucide, clsx, tailwind-merge, Sonner |
+| Motion and visuals | Framer Motion, GSAP (BlurText), Web Animations API, Canvas 2D, Web Audio API |
+| WebGPU | vgpu (vercel-labs), AeroShards shaders |
+| Server | Fastify 5, @fastify/cookie, @fastify/express, @fastify/rate-limit, cookie, set-cookie-parser |
+| Realtime | WebSocket (`ws`) |
+| Database | MySQL, mysql2, Drizzle ORM, drizzle-kit |
+| Audio analysis | ffmpeg-static, Essentia.js, Worker Threads, execa |
+| NetEase API | NeteaseCloudMusicApiEnhanced (`@NeteaseCloudMusicApiEnhanced/api-enhanced`, vendored as `@neteasecloudmusicapienhanced/api` v4.41.1), `@neteasecloudmusicapienhanced/unblockmusic-utils` |
+| Contracts | `@neon-radio/protocol` (workspace), zod |
+| Build and tooling | TypeScript (frontend 6.x / server 5.x), PostCSS, Tailwind PostCSS, Drizzle Kit |
+| Launch | pnpm, tsx, concurrently, PM2 |
+
+The vendored ncm-api also depends on axios, crypto-js, node-forge, jsdom, qrcode, xml2js, fzstd, music-metadata, express, express-fileupload, pac-proxy-agent, tunnel, and safe-decode-uri-component.
 
 ## Project structure
 
@@ -79,3 +94,13 @@ neon-radio/
 ```
 
 Entry layers (`routes` / `live`) only validate and forward; business modules never write SQL; the platform layer owns the database and third-party adapters. Dependencies point downward only, and each audio black box is used through its `index.ts`.
+
+## Credits and third-party assets
+
+- **NetEase API**: NeteaseCloudMusicApiEnhanced (`@NeteaseCloudMusicApiEnhanced/api-enhanced`, vendored as `@neteasecloudmusicapienhanced/api` v4.41.1) and `@neteasecloudmusicapienhanced/unblockmusic-utils`. Use it for personal radio only and respect the NetEase Cloud Music terms of service.
+- **Text animation**: `BlurText` comes from React Bytes.
+- **UI components**: `DraggableGrid` and `TiltedCard` come from Originkit, located in `frontend/src/components/vendor/originkit`.
+- **WebGPU visuals**: The `AeroShards` scene is built on [vgpu](https://github.com/vercel-labs/vgpu) with the shader provided by the project author.
+- **Background video**: **"Synth City by Visualdon - 4K 60fps"** by **VISUALDON**, sourced from Wallpaper Engine. The video remains the property of its author; the copy in `frontend/public/videos/loop.webm` is for demonstration only. Obtain permission or replace it before public distribution or commercial use.
+- **Icons and primitives**: Lucide, Radix UI, shadcn/ui.
+

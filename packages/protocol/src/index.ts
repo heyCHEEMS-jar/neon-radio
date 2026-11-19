@@ -37,6 +37,12 @@ export interface LyricLine {
 	translation: string | null
 }
 
+// 网易云标注的副歌区间，未标注时为 null
+export interface ChorusRange {
+	startMs: number
+	endMs: number
+}
+
 // 歌曲卡片：服务端入库、接口下发、前端渲染共用同一份字段
 export const radioSongSchema = z.object({
 	id: z.string(),
@@ -89,6 +95,13 @@ export const neteaseSyncStateSchema = z.object({
 	message: z.string()
 })
 export type NeteaseSyncState = z.infer<typeof neteaseSyncStateSchema>
+
+// 在线连接数，以及正在播放的连接按歌曲分组；本地播放优先，其余跟随主线
+export const radioListenersSchema = z.object({
+	online: z.number().int().nonnegative(),
+	songs: z.array(z.object({ songId: z.string(), listeners: z.number().int().nonnegative() }))
+})
+export type RadioListeners = z.infer<typeof radioListenersSchema>
 
 // 请求 ID 由前端生成，服务端原样带回，用于确认同一次操作
 export const requestIdSchema = z.string().regex(/^[a-zA-Z0-9-]{1,64}$/)
@@ -146,6 +159,12 @@ const neteaseSyncRequestSchema = z.strictObject({
 	requestId: requestIdSchema
 })
 
+// 浏览器上报真实播放状态，用于统计每首歌的在听人数
+const presenceCommandSchema = z.strictObject({
+	type: z.literal('presence'),
+	playing: z.boolean()
+})
+
 // 浏览器发往服务端的全部实时指令
 export const liveCommandSchema = z.union([
 	playbackRequestSchema,
@@ -153,7 +172,8 @@ export const liveCommandSchema = z.union([
 	playbackNextRequestSchema,
 	playbackPauseRequestSchema,
 	mainSyncRequestSchema,
-	neteaseSyncRequestSchema
+	neteaseSyncRequestSchema,
+	presenceCommandSchema
 ])
 export type LiveCommand = z.infer<typeof liveCommandSchema>
 
@@ -174,6 +194,7 @@ export const liveEventSchema = z.discriminatedUnion('type', [
 	}),
 	z.object({ type: z.literal('netease-sync'), data: neteaseSyncStateSchema.nullable(), snapshot: z.boolean() }),
 	z.object({ type: z.literal('netease-sync-response'), requestId: requestIdSchema, code: z.number().int(), message: z.string().optional() }),
+	z.object({ type: z.literal('radio-listeners'), data: radioListenersSchema }),
 	z.object({ type: z.literal('auth-required'), message: z.string() })
 ])
 export type LiveEvent = z.infer<typeof liveEventSchema>

@@ -3,6 +3,7 @@ import { AppError, UpstreamError } from '../platform/errors.js'
 import playlistRoutes from './playlists.js'
 import radioAudioRoutes from './radio-audio.js'
 import radioImpactsRoutes from './radio-impacts.js'
+import radioChorusRoutes from './radio-chorus.js'
 import radioLyricRoutes from './radio-lyric.js'
 import radioOptionsRoutes from './radio-options.js'
 import sessionRoutes from './session.js'
@@ -38,4 +39,5 @@ export default async function indexRoutes(fastify: FastifyInstance) {
 	await fastify.register(radioAudioRoutes)
 	await fastify.register(radioImpactsRoutes)
 	await fastify.register(radioLyricRoutes)
+	await fastify.register(radioChorusRoutes)
 }

@@ -7,6 +7,7 @@ import { getRadioOptions } from '../modules/settings/index.js'
 import { isSameOrigin } from '../platform/http/same-origin.js'
 import { bindBroadcasts } from './broadcast.js'
 import { createConnection, createPool } from './connection.js'
+import { bindListeners, collectListeners } from './listeners.js'
 import {
 	cancelPendingPlayback,
 	handleMainSyncRequest,
@@ -22,6 +23,7 @@ import { parseCommand } from './protocol.js'
 export default function initLive(fastify: FastifyInstance) {
 	const pool = createPool(fastify)
 	const broadcasts = bindBroadcasts(pool, fastify)
+	const listeners = bindListeners(pool)
 
 	pool.server.on('connection', (socket, request) => {
 		if (!isSameOrigin(request)) {
@@ -34,13 +36,18 @@ export default function initLive(fastify: FastifyInstance) {
 			connection.alive = true
 		})
 		socket.on('error', () => socket.terminate())
-		socket.on('close', () => pool.connections.delete(socket))
+		socket.on('close', () => {
+			pool.connections.delete(socket)
+			listeners.schedule()
+		})
 
 		// 首次连接发送配置、歌曲及主线快照
 		pool.send(connection, { type: 'radio-options', data: getRadioOptions() })
 		pool.send(connection, { type: 'radio-songs', data: getRoamingSongs() })
 		pool.send(connection, { type: 'playback-state', data: getMainPlayback() })
 		broadcasts.sendSync(getNeteaseSyncState(), true, connection)
+		pool.send(connection, { type: 'radio-listeners', data: collectListeners(pool) })
+		listeners.schedule()
 
 		socket.on('message', async (payload, binary) => {
 			const command = binary ? null : parseCommand(payload.toString())
@@ -52,6 +59,14 @@ export default function initLive(fastify: FastifyInstance) {
 				await handleSyncRequest(pool, connection, command)
 				return
 			}
+			// 播放状态只影响人数统计，不进入播放指令队列
+			if (command.type === 'presence') {
+				if (connection.playing !== command.playing) {
+					connection.playing = command.playing
+					listeners.schedule()
+				}
+				return
+			}
 			// 同一连接按收到的顺序处理选歌、开启同步和拖动进度
 			connection.queue = connection.queue.then(() => {
 				if (command.type === 'main-sync-request') return handleMainSyncRequest(pool, connection, command)
@@ -61,6 +76,8 @@ export default function initLive(fastify: FastifyInstance) {
 				return handlePlaybackRequest(pool, connection, command)
 			})
 			await connection.queue
+			// 本地切歌只改当前连接，处理完再合并广播一次最新人数
+			listeners.schedule()
 		})
 	})
 
@@ -81,6 +98,7 @@ export default function initLive(fastify: FastifyInstance) {
 	fastify.addHook('preClose', async () => {
 		clearInterval(heartbeat)
 		cancelPendingPlayback()
+		listeners.dispose()
 		broadcasts.dispose()
 		await pool.stop()
 		await broadcasts.wait()

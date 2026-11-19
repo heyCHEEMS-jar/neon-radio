@@ -12,6 +12,8 @@ export const ncmApi: Pick<
 	| 'song_detail'
 	| 'song_url_v1'
 	| 'lyric'
+	| 'lyric_new'
+	| 'song_chorus'
 	| 'login_status'
 	| 'login_refresh'
 	| 'login_qr_key'
@@ -24,6 +26,8 @@ export const ncmApi: Pick<
 	song_detail: api.song_detail,
 	song_url_v1: api.song_url_v1,
 	lyric: api.lyric,
+	lyric_new: api.lyric_new,
+	song_chorus: api.song_chorus,
 	login_status: api.login_status,
 	login_refresh: api.login_refresh,
 	login_qr_key: api.login_qr_key,
@@ -34,8 +38,8 @@ export const ncmApi: Pick<
 export const ncmOptions = { timeout: 10_000 }
 
 // 默认请求超清母带，实际可用音质由网易云曲源和当前账号权限决定
-export function requestSongUrl(id: string, cookie: string): Promise<NcmApi.Response> {
-	return ncmApi.song_url_v1({ ...ncmOptions, id, level: 'jymaster' as NcmApi.SoundQualityType, cookie })
+export function requestSongUrl(id: string, cookie: string, level = 'jymaster'): Promise<NcmApi.Response> {
+	return ncmApi.song_url_v1({ ...ncmOptions, id, level: level as NcmApi.SoundQualityType, cookie })
 }
 
 // 上游错误统一归类，业务层和路由只关心 expired/forbidden/unavailable

@@ -11,6 +11,7 @@ export interface LiveConnection {
 	token: string
 	authorized: boolean
 	local: PlaybackSnapshot | null
+	playing: boolean
 	queue: Promise<void>
 	alive: boolean
 }
@@ -87,6 +88,7 @@ export function createConnection(socket: WebSocket, request: IncomingMessage): L
 		token: readTokenCookie(request.headers.cookie),
 		authorized: false,
 		local: null,
+		playing: false,
 		queue: Promise.resolve(),
 		alive: true
 	}

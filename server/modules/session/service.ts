@@ -5,7 +5,7 @@ import { AppError, UpstreamError } from '../../platform/errors.js'
 import { readNeteaseAccount, refreshNeteaseCookie } from '../../platform/netease/auth.js'
 import { isNeteaseCookie } from '../../platform/netease/cookie.js'
 import { formatUtcTimestamp } from '../../platform/time.js'
-import { publishRoamingSongs, scheduleRoamingSync } from '../roaming/index.js'
+import { isRoamingSyncing, publishRoamingSongs, scheduleRoamingSync } from '../roaming/index.js'
 import { createBrowserSession, revokeBrowserSessions } from './browser-session.js'
 import { findNeteaseSessionRow, saveNeteaseSessionRow } from './store.js'
 import { getNeteaseSyncState, publishNeteaseSync, readNeteaseSyncError } from '../sync-state.js'
@@ -136,6 +136,7 @@ export async function withSessionCookie<T>(request: (value: string) => Promise<T
 // 手动同步全局节流 30 秒，失败后允许立即重试，在途任务继续复用
 export function startNeteaseSync() {
 	getSessionCookie()
+	if (isRoamingSyncing()) throw new AppError(429, '正在同步网易云数据，请稍后再试')
 	const current = getNeteaseSyncState()
 	const now = Date.now()
 	const remainingMs = nextManualSyncAt - now
@@ -143,7 +144,7 @@ export function startNeteaseSync() {
 		throw new AppError(429, `同步数据过于频繁，请 ${Math.ceil(remainingMs / 1000)} 秒后重试`)
 	}
 	nextManualSyncAt = now + 30_000
-	if (current?.phase === 'refreshing' || current?.phase === 'syncing') return current
+	if (current?.phase === 'refreshing' || current?.phase === 'syncing') throw new AppError(429, '正在同步网易云数据，请稍后再试')
 	const state = publishNeteaseSync({ id: randomUUID(), phase: 'refreshing', message: '正在刷新网易云 Cookie…' })
 	refreshSession(state.id).catch(() => console.warn('[漫游同步] 手动刷新网易云 Cookie 失败'))
 	return state
@@ -174,8 +175,16 @@ export function refreshSession(syncId: string | null = null) {
 			refreshSyncId = null
 			refresh = null
 			// 刷新失败但凭证未失效时仍同步歌曲，最终提示保留刷新失败的结果
-			if (cookie) scheduleRoamingSync(cookie, manualId ? { id: manualId, refreshError } : null)
-			else if (manualId) publishNeteaseSync({ id: manualId, phase: 'error', message: refreshError || '网易云登录已失效，请重新扫码' })
+			if (cookie) {
+				const scheduled = scheduleRoamingSync(cookie, manualId ? { id: manualId, refreshError, refreshDetails: true } : null)
+				if (!scheduled && manualId) {
+					publishNeteaseSync({
+						id: manualId,
+						phase: 'error',
+						message: refreshError ? `Cookie 刷新失败：${refreshError}；正在同步歌曲，请稍后再试` : '正在同步歌曲，请稍后再试'
+					})
+				}
+			} else if (manualId) publishNeteaseSync({ id: manualId, phase: 'error', message: refreshError || '网易云登录已失效，请重新扫码' })
 		}
 	})
 	return refresh

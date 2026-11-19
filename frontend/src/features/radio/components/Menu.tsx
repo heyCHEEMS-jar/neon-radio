@@ -1,8 +1,9 @@
 'use client'
 
 import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { Compass, LogIn, LogOut, RadioTower, Settings2 } from 'lucide-react'
+import { Compass, LogIn, LogOut, RadioTower, Settings2, Waves } from 'lucide-react'
 import { toast } from 'sonner'
+import { isSceneMotionEnabled, sceneMotionStorageKey, setSceneMotionEnabled } from '@/audio'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { fetchLoginStatus } from '@/features/radio/api'
 import { RadioLiveContext } from '@/features/radio/live/useRadioLive'
@@ -32,6 +33,7 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 	if (!live) throw new Error('电台菜单需要放在电台实时管线内')
 	const { reauthenticate } = live
 	const [dialog, setDialog] = useState<'login' | 'options' | 'logout' | null>(null)
+	const [sceneMotion, setSceneMotion] = useState(isSceneMotionEnabled)
 	const [status, setStatus] = useState<LoginStatus>('checking')
 	const [errorMessage, setErrorMessage] = useState('')
 	const triggerRef = useRef<HTMLSpanElement>(null)
@@ -114,6 +116,21 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 					<ContextMenuItem onSelect={onOpenRoaming}>
 						<Compass className="size-4" />
 						漫游所有歌曲
+					</ContextMenuItem>
+					<ContextMenuItem
+						onSelect={() => {
+							const next = !sceneMotion
+							setSceneMotionEnabled(next)
+							setSceneMotion(next)
+							try {
+								localStorage.setItem(sceneMotionStorageKey, next ? 'on' : 'off')
+							} catch {
+								toast.warning('无法保存屏幕晃动偏好')
+							}
+						}}
+					>
+						<Waves className="size-4" />
+						{sceneMotion ? '关闭屏幕晃动' : '开启屏幕晃动'}
 					</ContextMenuItem>
 					{status === 'authenticated' && (
 						<ContextMenuItem onSelect={() => setDialog('options')}>

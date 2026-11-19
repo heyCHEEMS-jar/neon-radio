@@ -1,5 +1,5 @@
 import { customType, datetime, index, int, json, mysqlEnum, mysqlTable, primaryKey, smallint, boolean, varchar } from 'drizzle-orm/mysql-core'
-import type { AudioImpact } from '@neon-radio/protocol'
+import type { AudioImpact, LyricLine } from '@neon-radio/protocol'
 
 // BINARY/MEDIUMBLOB 需要保留原始 Buffer，drizzle 内置 binary 会转成字符串
 const binaryHash = customType<{ data: Buffer }>({ dataType: () => 'binary(32)' })
@@ -50,6 +50,29 @@ export const songImpacts = mysqlTable(
 		durationMs: int('duration_ms', { unsigned: true }).notNull(),
 		impacts: json('impacts').$type<AudioImpact[]>().notNull(),
 		analyzedAt: datetime('analyzed_at').notNull()
+	},
+	table => [primaryKey({ columns: [table.neteaseUid, table.songId] })]
+)
+
+export const songChorus = mysqlTable(
+	'roaming_song_chorus',
+	{
+		neteaseUid: varchar('netease_uid', { length: 20 }).notNull(),
+		songId: varchar('song_id', { length: 20 }).notNull(),
+		startMs: int('start_ms', { unsigned: true }),
+		endMs: int('end_ms', { unsigned: true }),
+		fetchedAt: datetime('fetched_at').notNull()
+	},
+	table => [primaryKey({ columns: [table.neteaseUid, table.songId] })]
+)
+
+export const songLyric = mysqlTable(
+	'roaming_song_lyric',
+	{
+		neteaseUid: varchar('netease_uid', { length: 20 }).notNull(),
+		songId: varchar('song_id', { length: 20 }).notNull(),
+		lines: json('lines').$type<LyricLine[]>().notNull(),
+		fetchedAt: datetime('fetched_at').notNull()
 	},
 	table => [primaryKey({ columns: [table.neteaseUid, table.songId] })]
 )
