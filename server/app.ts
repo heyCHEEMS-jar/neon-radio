@@ -3,10 +3,12 @@ import Fastify from 'fastify'
 import fastifyExpress from '@fastify/express'
 import config from './config.js'
 import ncmApi from './ncm-api/main.js'
+import generateNcmConfig from './ncm-api/generateConfig.js'
 import indexRoutes from './routes/index.js'
 import qrInterceptor from './hooks/qr-interceptor.js'
 import browserAuth, { clearExpiredBrowserToken } from './hooks/browser-auth.js'
 import requestPathGuard from './hooks/request-path-guard.js'
+import sameOriginGuard from './http/same-origin.js'
 import radioPlugin from './plugins/radio.js'
 
 // 仅为 Windows 终端切换 UTF-8 代码页
@@ -28,11 +30,14 @@ try {
 		return reply.header('Cache-Control', 'no-store').code(404).send({ code: 404, message: '404 未知访问路径' })
 	})
 	fastify.addHook('onRequest', requestPathGuard)
+	fastify.addHook('onRequest', sameOriginGuard)
 	fastify.addHook('onRequest', browserAuth)
 	fastify.addHook('onRequest', qrInterceptor)
 	fastify.addHook('onSend', clearExpiredBrowserToken)
 	await fastify.register(fastifyExpress) // 兼容 express
-	fastify.use('/neon-radio/ncm', await ncmApi.constructServer())
+	// 复用库内启动初始化，生成 xeapi 公钥后再挂载网易云接口
+	await generateNcmConfig()
+	fastify.use('/neon-radio/ncm', await ncmApi.constructServer()) // ncm-api
 	await fastify.register(radioPlugin)
 	await fastify.register(indexRoutes, { prefix: '/neon-radio' })
 

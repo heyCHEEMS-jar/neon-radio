@@ -24,3 +24,8 @@ export const ncmApi: Pick<
 	login_qr_check: api.login_qr_check
 }
 export const ncmOptions = { timeout: 10_000 }
+
+// 默认请求超清母带，实际可用音质由网易云曲源和当前账号权限决定
+export function requestSongAudio(id: string, cookie: string): Promise<NcmApi.Response> {
+	return api.song_url_v1({ ...ncmOptions, id, level: 'jymaster', cookie })
+}

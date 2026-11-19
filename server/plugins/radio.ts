@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import config from '../config.js'
 import { initRoamingSongRepository } from '../repositories/roaming-song.js'
+import { initSongEnergyRepository } from '../repositories/song-energy.js'
 import { initRadioOptions } from '../services/radio/options.js'
+import { initEnergyAnalysis } from '../services/radio/energy.js'
+import { closeRadioPlayback, initRadioPlayback } from '../services/radio/playback.js'
 import { publishRoamingSongs, waitForRoamingSync } from '../services/radio/roaming-sync.js'
 import { initSession, refreshSession, waitForSessionUpdates } from '../services/session/netease-session.js'
 import { clearQrCache } from '../services/session/qr-code.js'
@@ -12,9 +15,12 @@ import initRadioLive from '../websocket/radio-live.js'
 export default async function radioPlugin(fastify: FastifyInstance) {
 	await initSession()
 	// 会话初始化已保证数据库可用，独立的表初始化并行执行
-	await Promise.all([initRoamingSongRepository(), initRadioOptions()])
+	await Promise.all([initRoamingSongRepository(), initSongEnergyRepository(), initRadioOptions()])
+	// 先订阅歌单发布，启动加载也会触发缺失包络的批量检查
+	initEnergyAnalysis()
 	// 建连前加载已入库快照，首屏无需等待下一次刷新
 	await publishRoamingSongs()
+	initRadioPlayback()
 	initRadioLive(fastify)
 
 	const timer = setInterval(
@@ -26,6 +32,7 @@ export default async function radioPlugin(fastify: FastifyInstance) {
 	timer.unref()
 	fastify.addHook('onClose', async () => {
 		clearInterval(timer)
+		closeRadioPlayback()
 		clearQrCache()
 		// 在途会话操作可能安排歌曲同步，必须先等会话，再等同步
 		await waitForSessionUpdates()

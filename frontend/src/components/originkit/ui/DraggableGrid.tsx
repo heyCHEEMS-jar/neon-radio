@@ -31,6 +31,8 @@ export interface DraggableGridProps {
 	enableWheel?: boolean
 	placeholderColor?: string
 	onItemClick?: (item: GridItem, index: number) => void
+	initialItemId?: string | null
+	activeItemId?: string | null
 	active?: boolean
 	style?: CSSProperties
 }
@@ -164,6 +166,8 @@ export default function DraggableGrid({
 	enableWheel = false,
 	placeholderColor = '#1a1a1f',
 	onItemClick,
+	initialItemId,
+	activeItemId,
 	active = true,
 	style
 }: DraggableGridProps) {
@@ -223,20 +227,40 @@ export default function DraggableGrid({
 		return () => observer.disconnect()
 	}, [])
 
-	// 打开或切换列表时回到起点，关闭和卸载时停止动画
+	// 打开或切换列表时把初始歌曲放到中央，播放标记变化不重置拖动位置
 	useLayoutEffect(() => {
 		dragControls.cancel()
 		stopMotion()
 		hasMoved.current = false
-		x.set(safeGap)
-		y.set(safeGap)
+		const foundIndex = initialItemId ? safeItems.findIndex(item => item.id === initialItemId) : -1
+		const initialIndex = Math.max(0, foundIndex)
+		const initialColumn = initialIndex % blockColumns
+		const initialRow = Math.floor(initialIndex / blockColumns)
+		x.set(containerSize.w > 0 ? containerSize.w / 2 - initialColumn * cellWidth - safeImageWidth / 2 : safeGap)
+		y.set(containerSize.h > 0 ? containerSize.h / 2 - initialRow * cellHeight - safeImageHeight / 2 : safeGap)
 		setIsDragging(false)
 		setImagesReady(false)
 		return () => {
 			dragControls.cancel()
 			stopMotion()
 		}
-	}, [active, safeItems, safeGap, dragControls, stopMotion, x, y])
+	}, [
+		active,
+		safeItems,
+		initialItemId,
+		containerSize.w,
+		containerSize.h,
+		blockColumns,
+		cellWidth,
+		cellHeight,
+		safeImageWidth,
+		safeImageHeight,
+		safeGap,
+		dragControls,
+		stopMotion,
+		x,
+		y
+	])
 
 	// 按矩形相交计算可见行列，只有跨过卡片边缘才更新 React
 	useLayoutEffect(() => {
@@ -457,11 +481,16 @@ export default function DraggableGrid({
 									smoothness={0}
 									backgroundColor={src && !failed ? placeholderColor : getItemColor(index)}
 									fetchPriority={inViewport ? 'high' : 'low'}
+									playing={Boolean(item.id && item.id === activeItemId)}
 									onImageError={() => {
 										if (src) setFailedImages(current => (current.has(src) ? current : new Set(current).add(src)))
 									}}
 								>
-									<span style={{ position: 'relative', zIndex: 0 }}>{index + 1}</span>
+									{src && !failed ? (
+										<Spinner className="relative z-0 size-8" aria-label="正在加载封面" />
+									) : (
+										<span className="relative z-0 text-sm">暂无封面</span>
+									)}
 								</TiltedCard>
 							</div>
 						</motion.div>

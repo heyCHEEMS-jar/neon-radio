@@ -20,7 +20,11 @@ export async function insertBrowserSession(uid: string, tokenHash: Buffer, expir
 	try {
 		await connection.beginTransaction()
 		await connection.execute('DELETE FROM browser_sessions WHERE expires_at <= UTC_TIMESTAMP() OR token_hash = ?', [previousTokenHash])
-		await connection.execute('INSERT INTO browser_sessions (token_hash, netease_uid, expires_at) VALUES (?, ?, ?)', [tokenHash, uid, new Date(expiresAt)])
+		await connection.execute('INSERT INTO browser_sessions (token_hash, netease_uid, expires_at) VALUES (?, ?, ?)', [
+			tokenHash,
+			uid,
+			new Date(expiresAt)
+		])
 		await connection.commit()
 	} catch (error: unknown) {
 		await connection.rollback()

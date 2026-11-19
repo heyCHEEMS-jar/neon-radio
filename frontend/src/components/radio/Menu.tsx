@@ -1,7 +1,7 @@
 'use client'
 
 import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { Compass, LogIn, LogOut, Settings2 } from 'lucide-react'
+import { Compass, LogIn, LogOut, RadioTower, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { RadioLiveContext } from '@/hooks/useRadioLive'
@@ -50,8 +50,9 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 		try {
 			const response = await fetch('/neon-radio/login', { cache: 'no-store', signal: controller.signal })
 			const result: unknown = await response.json()
-			if (!response.ok || !isRecord(result) || !isRecord(result.data) || typeof result.data.loggedIn !== 'boolean')
+			if (!response.ok || !isRecord(result) || !isRecord(result.data) || typeof result.data.loggedIn !== 'boolean') {
 				throw new Error('登录状态检查失败，请重试')
+			}
 			if (!controller.signal.aborted) setStatus(result.data.loggedIn ? 'authenticated' : 'anonymous')
 		} catch {
 			if (controller.signal.aborted) return
@@ -111,6 +112,12 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 						if (!dialog) onRestoreFocus()
 					}}
 				>
+					{live.playback?.mode === 'local' && !live.playbackPending && (
+						<ContextMenuItem onSelect={() => void live.returnToMain()}>
+							<RadioTower className="size-4" />
+							回主电台
+						</ContextMenuItem>
+					)}
 					<ContextMenuItem onSelect={onOpenRoaming}>
 						<Compass className="size-4" />
 						漫游所有歌曲

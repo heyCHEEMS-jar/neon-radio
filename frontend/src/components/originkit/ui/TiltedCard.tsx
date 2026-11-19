@@ -1,7 +1,7 @@
 'use client'
 
-import { motion, useMotionTemplate, useReducedMotion, useSpring, useTransform } from 'framer-motion'
-import type { CSSProperties, ImgHTMLAttributes, PointerEvent, ReactNode } from 'react'
+import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion'
+import { useState, type CSSProperties, type ImgHTMLAttributes, type PointerEvent, type ReactNode } from 'react'
 import styles from '@/styles/tilted-card.module.css'
 
 interface TiltedCardProps {
@@ -13,12 +13,12 @@ interface TiltedCardProps {
 	srcSet?: string
 	fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority']
 	onImageError?: ImgHTMLAttributes<HTMLImageElement>['onError']
+	playing?: boolean
 	backgroundColor?: string
 	radius?: number
 	rotateAmplitude?: number
 	scaleOnHover?: number
 	smoothness?: number
-	glare?: number
 	onClick?: () => void
 	children?: ReactNode
 	className?: string
@@ -35,18 +35,21 @@ export default function TiltedCard({
 	srcSet,
 	fetchPriority = 'auto',
 	onImageError,
+	playing = false,
 	backgroundColor = '#1a1a1f',
 	radius = 15,
 	rotateAmplitude = 12,
 	scaleOnHover = 1.05,
 	smoothness = 0.6,
-	glare = 0.5,
 	onClick,
 	children,
 	className,
 	style
 }: TiltedCardProps) {
 	const reducedMotion = useReducedMotion()
+	// 按封面来源记录加载结果，网格复用卡片时不沿用旧图片的加载状态
+	const [loadedImage, setLoadedImage] = useState<{ src: string; srcSet?: string } | null>(null)
+	const imageLoaded = Boolean(imageSrc && loadedImage?.src === imageSrc && loadedImage.srcSet === srcSet)
 	const artistNames = artists.join(' / ')
 	// 时长按毫秒接收，卡片显示为 mm:ss
 	const seconds = typeof duration === 'number' && Number.isFinite(duration) && duration >= 0 ? Math.floor(duration / 1000) : null
@@ -57,19 +60,18 @@ export default function TiltedCard({
 	const x = useSpring(50, spring)
 	const y = useSpring(50, spring)
 	const scale = useSpring(1, spring)
-	const highlight = useSpring(0, spring)
 	const amplitude = reducedMotion ? 0 : Math.max(0, Math.min(60, rotateAmplitude))
 	const rotateX = useTransform(y, [0, 100], [amplitude, -amplitude])
 	const rotateY = useTransform(x, [0, 100], [-amplitude, amplitude])
-	const light = useMotionTemplate`radial-gradient(circle at ${x}% ${y}%, rgba(255, 255, 255, 0.55), transparent 65%)`
 
+	// 离开卡片或开始拖动时恢复角度和缩放
 	const reset = () => {
 		x.set(50)
 		y.set(50)
 		scale.set(1)
-		highlight.set(0)
 	}
 
+	// 鼠标悬停时调整角度和缩放，触摸与拖动不触发
 	const followPointer = (event: PointerEvent<HTMLDivElement>) => {
 		if (event.pointerType === 'touch' || event.buttons !== 0) return
 		const rect = event.currentTarget.getBoundingClientRect()
@@ -77,7 +79,6 @@ export default function TiltedCard({
 		x.set(Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)))
 		y.set(Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)))
 		scale.set(reducedMotion ? 1 : Math.max(0.5, scaleOnHover))
-		highlight.set(Math.max(0, Math.min(1, glare)))
 	}
 
 	return (
@@ -99,11 +100,17 @@ export default function TiltedCard({
 			onPointerLeave={reset}
 			onPointerCancel={reset}
 		>
-			<motion.div className={styles.body} style={{ rotateX, rotateY, scale, borderRadius: radius, backgroundColor }}>
-				{children}
+			<motion.div
+				className={styles.body}
+				data-playing={playing || undefined}
+				style={{ rotateX, rotateY, scale, borderRadius: radius, backgroundColor }}
+			>
+				{!imageLoaded && children}
+				{playing && <span className={styles.playing}>播放中</span>}
 				{imageSrc && (
 					<img
 						className={styles.image}
+						style={{ opacity: imageLoaded ? 1 : 0 }}
 						src={imageSrc}
 						srcSet={srcSet}
 						alt={altText}
@@ -111,6 +118,7 @@ export default function TiltedCard({
 						loading="eager"
 						decoding="async"
 						fetchPriority={fetchPriority}
+						onLoad={() => setLoadedImage({ src: imageSrc, srcSet })}
 						onError={onImageError}
 					/>
 				)}
@@ -133,7 +141,6 @@ export default function TiltedCard({
 						)}
 					</div>
 				)}
-				<motion.span className={styles.glare} aria-hidden="true" style={{ background: light, opacity: highlight }} />
 				<span className={styles.rim} aria-hidden="true" />
 			</motion.div>
 		</div>

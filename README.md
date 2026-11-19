@@ -74,7 +74,7 @@ Fastify 服务端（4003）
 pnpm install
 ```
 
-项目声明要求 Node.js `20.12.0` 或以上，并指定 pnpm `12.6.0`。版本配置见 [package.json](./package.json)。
+项目声明要求 Node.js `20.12.0` 或以上。
 
 ### 2. 配置环境变量
 

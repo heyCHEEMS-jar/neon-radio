@@ -1,12 +1,14 @@
 'use client'
 
-import { useContext } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { RadioSceneContext } from '@/components/radio/Radio'
 import { visualizerConfig as config } from '@/config/visualizer'
+import { getPlaybackPosition, RadioLiveContext } from '@/hooks/useRadioLive'
+import { RadioAudioContext } from '@/hooks/useRadioAudio'
 import { useVisualizer } from '@/hooks/useVisualizer'
 
 const edgeClassName =
-	'absolute left-0 block h-[clamp(48px,10svh,96px)] w-full opacity-70 [mask-image:linear-gradient(to_right,transparent,#000_16%,#000_84%,transparent)]'
+	'absolute left-0 block h-[clamp(72px,15svh,144px)] w-full opacity-70 [mask-image:linear-gradient(to_right,transparent,#000_16%,#000_84%,transparent)]'
 
 const infoClassName =
 	'min-w-0 translate-y-1/2 border-t-[clamp(1px,0.3vw,5px)] border-white/70 pt-[clamp(6px,0.8vw,12px)] text-center text-[clamp(10px,2.4vw,40px)] font-light text-[#e6cbd6] [text-shadow:0_2px_12px_rgba(0,0,0,0.65)]'
@@ -14,23 +16,48 @@ const infoClassName =
 // 描边随中心容器宽度缩放，最细保留1px
 const frameClassName = 'absolute top-1/2 left-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 border-[clamp(1px,1.05cqw,5px)]'
 
+function formatTime(milliseconds: number) {
+	const seconds = Math.floor(milliseconds / 1000)
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
 export default function Visuals() {
 	const active = useContext(RadioSceneContext)
+	const live = useContext(RadioLiveContext)
+	const audio = useContext(RadioAudioContext) // 展示媒体实际进度，暂停后不继续递增本页时间
+	const playback = live?.playback ?? null
+	const [now, setNow] = useState(Date.now())
 	const animationPlayState = active ? 'running' : 'paused'
-	const { ringRef, coverRef, imageRef, topRef, bottomRef } = useVisualizer(active)
+	const { visualsRef, centerRef, ringRef, coverRef, imageRef, topRef, bottomRef } = useVisualizer(active)
+	const song = playback?.song ?? null
+	const media = audio?.audioRef.current // 所有播放 UI 共用媒体时钟
+	const position =
+		media && media.dataset.playbackId === playback?.playbackId
+			? Math.max(0, media.currentTime - Number(media.dataset.start ?? 0)) * 1000
+			: playback
+				? getPlaybackPosition(playback, now)
+				: 0
+	const progress = `${formatTime(position)}/${formatTime(song?.duration ?? 0)}`
+
+	useEffect(() => {
+		setNow(Date.now())
+		if (!song || !active) return
+		const timer = setInterval(() => setNow(Date.now()), 1000)
+		return () => clearInterval(timer)
+	}, [active, playback?.playbackId, playback?.positionMs, playback?.receivedAt, song])
 
 	return (
-		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化（模拟频谱）">
+		<section ref={visualsRef} className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化">
 			<canvas ref={topRef} className={`top-0 ${edgeClassName}`} aria-hidden="true" />
 
 			<div className="absolute top-1/2 grid w-full -translate-y-1/2 grid-cols-[minmax(0,1fr)_min(44vw,64vmin,480px)_minmax(0,1fr)] items-center gap-[clamp(8px,2vw,32px)] px-[clamp(16px,3vw,48px)]">
 				<div className={infoClassName}>
-					<p className="m-0 truncate uppercase tracking-[0.06em]" title={config.songName}>
-						{config.songName}
+					<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
+						{song?.name ?? '等待电台'}
 					</p>
 				</div>
 
-				<div className="relative aspect-square w-full @container">
+				<div ref={centerRef} className="relative aspect-square w-full origin-center will-change-transform @container">
 					<div
 						className={`${frameClassName} motion-safe:animate-[cover-frame-spin_24s_linear_infinite] border-white/70 shadow-[0_0_clamp(2px,2.5cqw,12px)_rgba(255,255,255,0.25)]`}
 						style={{ animationPlayState }}
@@ -48,7 +75,7 @@ export default function Visuals() {
 					>
 						<img
 							ref={imageRef}
-							src={config.coverSrc}
+							src={song?.picUrl || config.coverSrc}
 							alt=""
 							className="block size-full object-cover select-none will-change-transform"
 							style={{ transform: `scale(${config.camera.scale})` }}
@@ -58,8 +85,8 @@ export default function Visuals() {
 				</div>
 
 				<div className={infoClassName}>
-					<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${config.playbackProgress}`}>
-						{config.playbackProgress}
+					<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
+						{progress}
 					</p>
 				</div>
 			</div>

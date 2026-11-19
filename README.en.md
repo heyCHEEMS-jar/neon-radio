@@ -74,7 +74,7 @@ Run from the project root:
 pnpm install
 ```
 
-The project declares Node.js `20.12.0` or newer and pnpm `12.6.0`. See [package.json](./package.json) for version settings.
+The project declares Node.js `20.12.0`.
 
 ### 2. Configure Environment Variables
 

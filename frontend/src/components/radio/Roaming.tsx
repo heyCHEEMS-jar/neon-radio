@@ -2,7 +2,7 @@
 
 import { useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { RadioTower, X } from 'lucide-react'
 import DraggableGrid from '@/components/originkit/ui/DraggableGrid'
 import { Spinner } from '@/components/ui/spinner'
 import { RadioLiveContext } from '@/hooks/useRadioLive'
@@ -17,8 +17,9 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 	const live = useContext(RadioLiveContext)
 	if (!live) throw new Error('漫游需要放在电台实时管线内')
 	const dialogRef = useRef<HTMLDialogElement>(null)
+	const initialSongId = useRef(live.playback?.song?.id ?? null)
 	const reducedMotion = useReducedMotion()
-	// 列表未变化时保持网格引用，避免连接状态或弹窗变化重置拖动位置
+	// 列表未变化时保持网格引用，避免播放状态刷新重置拖动位置
 	const items = useMemo(
 		() =>
 			live.songs?.map(({ id, name, artists, picUrl, duration }) => ({
@@ -30,6 +31,8 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 			})) ?? null,
 		[live.songs]
 	)
+	const currentSong = live.playback?.song ?? null
+	const currentMissing = Boolean(currentSong && items && !items.some(item => item.id === currentSong.id))
 
 	// 挂载时同步打开弹窗，关闭后由父组件卸载并恢复焦点
 	useLayoutEffect(() => {
@@ -56,13 +59,23 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 			}}
 			className="fixed inset-0 m-0 block h-dvh max-h-none w-full max-w-none overflow-hidden border-0 bg-white p-0 text-white backdrop:bg-transparent [&:not([open])]:invisible [&:not([open])]:pointer-events-none"
 		>
-			<header className="pointer-events-none absolute left-4 top-4 z-20 flex max-w-[calc(100%-5rem)] flex-col gap-2 rounded-xl bg-black/60 px-4 py-3">
+			<header className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-5rem)] flex-col items-start gap-2 rounded-xl bg-black/60 px-4 py-3">
 				<h2 id="roaming-title" className="text-lg font-semibold">
 					漫游所有歌曲
 				</h2>
 				<p id="roaming-description" className="text-sm text-white/70">
-					Esc 退出
+					Esc 退出 · 点击封面切换播放
 				</p>
+				{currentMissing && <p className="max-w-72 text-xs text-amber-200">当前播放「{currentSong?.name}」，不在本次漫游快照中</p>}
+				<button
+					type="button"
+					disabled={live.playback?.mode === 'main' || live.playbackPending}
+					onClick={() => void live.returnToMain()}
+					className="flex cursor-pointer items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-sm hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					<RadioTower className="size-4" />
+					回主电台
+				</button>
 			</header>
 			{items === null ? (
 				<div className="grid h-full place-items-center text-sm text-neutral-500" role="status">
@@ -84,9 +97,21 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 			) : (
 				<DraggableGrid
 					items={items}
+					initialItemId={initialSongId.current}
+					activeItemId={currentSong?.id ?? null}
+					onItemClick={item => {
+						if (!item.id) return
+						if (item.id === currentSong?.id) {
+							onClose()
+							return
+						}
+						void live.playSong(item.id).then(success => {
+							if (success) onClose()
+						})
+					}}
 					active={open}
 					columns={5}
-					overscan={2}
+					overscan={1}
 					mobileColumns={3}
 					mobileOverscan={1}
 					gap={3}

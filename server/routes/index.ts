@@ -4,6 +4,8 @@ import { isRecord } from '../utils/object.js'
 import playlistRoutes from './playlists.js'
 import sessionRoutes from './session.js'
 import radioOptionsRoutes from './radio-options.js'
+import radioAudioRoutes from './radio-audio.js'
+import radioEnergyRoutes from './radio-energy.js'
 
 const errorMessages: Record<number, string> = {
 	401: '网易云登录已失效，请重新扫码',
@@ -32,5 +34,6 @@ export default async function indexRoutes(fastify: FastifyInstance) {
 	await fastify.register(playlistRoutes)
 	await fastify.register(sessionRoutes)
 	await fastify.register(radioOptionsRoutes)
-
+	await fastify.register(radioAudioRoutes)
+	await fastify.register(radioEnergyRoutes)
 }

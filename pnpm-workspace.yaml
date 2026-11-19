@@ -6,4 +6,5 @@ allowBuilds:
   core-js: true
   core-js-pure: true
   esbuild: true
+  ffmpeg-static: true
   webgpu: true

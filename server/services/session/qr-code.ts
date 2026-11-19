@@ -102,4 +102,3 @@ export async function checkQr(token: string, key: string): Promise<QrStatus> {
 		attempt.poll = null
 	}
 }
-

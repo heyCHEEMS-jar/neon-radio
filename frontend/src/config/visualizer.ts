@@ -1,5 +1,5 @@
 export const visualizerConfig = {
-	coverSrc: '/images/Duvet.jpg',
+	coverSrc: '/images/thumb_music.webp',
 	coverClassName: 'w-[52%]',
 	camera: {
 		scale: 1.2,
@@ -7,27 +7,54 @@ export const visualizerConfig = {
 		maxRotation: 3,
 		speed: 0.8
 	},
-	// 仅用于样式展示，暂不关联真实播放状态。
-	songName: 'Duvet',
-	playbackProgress: '0:00/0:00',
-	bufferSize: 256,
-	maxFps: 60,
-	maxDpr: 1.5,
+	bufferSize: 1024, // 对应 2048 点 FFT，兼顾低频分辨率和响应
+	maxFps: 24,
+	maxDpr: 1.0,
+	spectrum: {
+		smoothingTimeConstant: 0.45,
+		minDecibels: -80,
+		maxDecibels: -10 // 旁路采样不再经过音量衰减，留出强音余量，避免频谱整片顶满
+	},
+	shake: {
+		noiseFloor: 0.015,
+		baselineSeconds: 0.5,
+		cooldownSeconds: 0.5,
+		levels: {
+			medium: { minOnset: 0.75, offset: 8, scale: 0.012, centerScale: 0.04, centerRecoil: 0.012, duration: 100 },
+			high: { minOnset: 1.1, offset: 20, scale: 0.025, centerScale: 0.08, centerRecoil: 0.025, duration: 120 }
+		}
+	},
 	ring: {
-		count: 64,
+		count: 48,
 		gap: 6,
-		spacing: 8,
-		openThreshold: 32,
-		sensitivity: 2.6,
+		spacing: 10,
+		minFrequency: 60,
+		maxFrequency: 12000,
+		openThreshold: 32, // 抑制微弱底噪，让圆环主要由局部波峰拉伸
+		sensitivity: 1.1,
+		power: 1.5,
+		response: {
+			sustain: 0.08, // 弱化整体呼吸，保留少量局部波峰的拉伸
+			transientBoost: 2,
+			contrastBoost: 1.3,
+			baselineSeconds: 0.65,
+			attackSeconds: 0.02,
+			releaseSeconds: 0.24
+		},
 		maxHeight: 80,
-		lineWidth: 3,
+		lineWidth: 2,
 		color: 'rgba(255, 255, 255, 0.7)',
-		glow: { strength: 6, color: 'rgba(255, 255, 255, 0.35)' }
+		glow: { strength: 3, color: 'rgba(255, 255, 255, 0.35)' }
 	},
 	edges: {
 		maxCount: 90,
 		spacing: 8,
 		gap: 2,
+		top: { minFrequency: 600, maxFrequency: 12000 },
+		bottom: { minFrequency: 60, maxFrequency: 600 },
+		openThreshold: 24,
+		sensitivity: 1.35,
+		power: 2, // 收低弱音、拉高强音，扩大柱高的强弱对比
 		color: { gradient: ['#ffffff', '#ffffff'] },
 		glow: { strength: 3, color: 'rgba(255, 255, 255, 0.35)' }
 	}

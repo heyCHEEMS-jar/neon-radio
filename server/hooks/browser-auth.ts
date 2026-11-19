@@ -20,7 +20,9 @@ export default async function browserAuth(request: FastifyRequest, reply: Fastif
 	} catch {
 		return reply.code(400).send({ code: 400, message: '请求路径不合法' })
 	}
-	if (!path.startsWith('/neon-radio/') || publicPaths.has(path) || path.startsWith('/neon-radio/login-qr/')) return
+	// 音源目录只公开 GET，具体歌曲由业务服务校验
+	const publicAudio = request.method === 'GET' && path.startsWith('/neon-radio/radio-audio/')
+	if (!path.startsWith('/neon-radio/') || publicPaths.has(path) || path.startsWith('/neon-radio/login-qr/') || publicAudio) return
 
 	reply.header('Cache-Control', 'private, no-store')
 	try {

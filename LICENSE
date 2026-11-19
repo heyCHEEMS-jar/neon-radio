@@ -13,3 +13,40 @@ ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
 WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+------------------------------------------------------------------------
+Third-party notices: ffmpeg-static and FFmpeg
+------------------------------------------------------------------------
+
+The ISC license above applies to the original neon-radio code. Third-party
+components retain their own licenses and copyright notices.
+
+ffmpeg-static (npm package, version 5.3.0)
+  License: GPL-3.0-or-later
+  Authors: Eugene Ware, Jannis R, and contributors
+  Source: https://github.com/eugeneware/ffmpeg-static
+  The full GNU GPL version 3 text is provided in LICENSE-FFMPEG, copied
+  verbatim from the package's LICENSE file.
+
+FFmpeg binaries downloaded by ffmpeg-static
+  These binaries are licensed separately from the npm package. Preserve
+  the LICENSE and README supplied with the specific binary being used.
+  The package's default binary release is b6.1.1:
+  https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1
+
+  The installed Windows x64 build is:
+    Version: 6.1.1-essentials_build-www.gyan.dev
+    License: GNU GPL version 3
+    Build provider: https://www.gyan.dev/ffmpeg/builds/
+    FFmpeg source: https://github.com/FFmpeg/FFmpeg/commit/e38092ef93
+
+  Other platforms and custom binaries may have different build details
+  and licensing requirements; consult their accompanying notices.
+
+Redistributing GPL-covered binaries, including in a release archive or
+container image, requires compliance with the applicable GPL terms.
+Retain the license and copyright notices and provide the complete
+Corresponding Source for the specific build as required by GPL section 6,
+including the required linked-library sources and build scripts.
+A general upstream link or this notice alone does not satisfy those
+source-distribution requirements.

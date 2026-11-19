@@ -64,12 +64,7 @@ export async function replaceRoamingSongs(uid: string, songs: ReadonlyMap<string
 export async function readRoamingSongs(uid: string): Promise<RadioSong[]> {
 	const [rows] = await pool.execute<RoamingSongRow[]>('SELECT song FROM roaming_songs WHERE netease_uid = ? ORDER BY sort_order', [uid])
 	return rows.map(({ song }) => {
-		if (
-			!isRecord(song) ||
-			(typeof song.id !== 'string' && typeof song.id !== 'number') ||
-			typeof song.name !== 'string' ||
-			!Array.isArray(song.ar)
-		) {
+		if (!isRecord(song) || (typeof song.id !== 'string' && typeof song.id !== 'number') || typeof song.name !== 'string' || !Array.isArray(song.ar)) {
 			throw new Error('已入库的漫游歌曲详情异常')
 		}
 		const artists = song.ar.map((artist: unknown) => {

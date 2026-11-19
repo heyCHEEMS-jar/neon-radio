@@ -17,12 +17,12 @@ export default function Video() {
 
 	return (
 		<>
-			<link rel="preload" as="image" href="/images/thumb.webp" fetchPriority="high" />
+			<link rel="preload" as="image" href="/images/thumb_background.webp" fetchPriority="high" />
 			<video
 				ref={videoRef}
 				className="pointer-events-none fixed inset-0 z-0 block h-svh w-full bg-black object-cover object-center"
-				poster="/images/thumb.webp"
-				autoPlay
+				poster="/images/thumb_background.webp"
+				autoPlay={active}
 				loop
 				muted
 				playsInline
