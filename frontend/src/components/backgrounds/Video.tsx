@@ -26,7 +26,6 @@ export default function Video() {
 				loop
 				muted
 				playsInline
-				preload="auto"
 				aria-hidden="true"
 			>
 				<source src="/videos/loop.webm" type="video/webm" />

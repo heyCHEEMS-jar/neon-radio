@@ -1,11 +1,29 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { I18nProvider } from '@/i18n/context'
-import './globals.css'
+import { siteDescription, siteName, siteUrl } from '@/lib/site'
+import '../styles/globals.css'
 
 export const metadata: Metadata = {
-	title: 'Neon Radio',
-	description: 'Neon Radio'
+	metadataBase: new URL(siteUrl),
+	title: { default: siteName, template: `%s | ${siteName}` },
+	description: siteDescription,
+	alternates: { canonical: '/' },
+	openGraph: {
+		type: 'website',
+		siteName,
+		url: '/',
+		title: siteName,
+		description: siteDescription,
+		locale: 'zh_CN',
+		alternateLocale: 'en_US'
+	},
+	twitter: {
+		card: 'summary_large_image',
+		title: siteName,
+		description: siteDescription
+	},
+	robots: { index: true, follow: true }
 }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
