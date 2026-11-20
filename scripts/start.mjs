@@ -17,13 +17,12 @@ const requestedTool = process.env.PACKAGE_TOOL || 'pnpm'
 const packageTool = ['pnpm', 'npm', 'yarn'].includes(requestedTool) ? requestedTool : 'pnpm'
 if (packageTool !== requestedTool) console.warn(`未知的包管理器 ${requestedTool}，已回退到 pnpm`)
 
-// 构建仍走包管理器；PM2 直接跑 node 入口，避免 spawn .cmd 在 Windows 抛 EINVAL
 const packageBinary = process.platform === 'win32' ? `${packageTool}.cmd` : packageTool
 const ROOT = path.join(ROOT_DIR, '..')
 const serverArg = path.join(ROOT, 'server', 'app.ts')
 const webEntry = path.join(FRONTEND_DIR, 'node_modules', 'next', 'dist', 'bin', 'next')
 
-// 生产构建失败时直接退出，不启动旧产物
+// 生产构建失败时直接退出
 const build = spawnSync(packageBinary, ['run', 'build'], { stdio: 'inherit', shell: true, cwd: FRONTEND_DIR, env: { ...process.env, NODE_ENV: 'production' } })
 if (build.status !== 0) {
 	console.error('\n前端构建失败！已停止启动服务。\n')
@@ -43,7 +42,6 @@ pm2.connect(error => {
 		[
 			{
 				script: serverArg,
-				// 进程内装载 TS，避免 tsx CLI 再 spawn 子进程（那会弹出控制台窗口）
 				node_args: ['--import', 'tsx'],
 				interpreter: 'node',
 				cwd: path.join(ROOT_DIR, '..'),
