@@ -7,6 +7,8 @@ import { isSceneMotionEnabled, sceneMotionStorageKey, setSceneMotionEnabled } fr
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { fetchLoginStatus } from '@/features/radio/api'
 import { RadioLiveContext } from '@/features/radio/live/useRadioLive'
+import { useI18n } from '@/i18n/context'
+import type { StringKey } from '@/i18n/locales'
 import type { MenuPosition } from '../Radio'
 
 const Login = lazy(() => import('./Login'))
@@ -21,16 +23,17 @@ interface MenuProps {
 	onRestoreFocus: () => void
 }
 
-const menuLabels: Record<LoginStatus, string> = {
-	checking: '检查登录状态…',
-	authenticated: '退出登录',
-	anonymous: '登录电台',
-	error: '检查登录状态'
+const menuLabels: Record<LoginStatus, StringKey> = {
+	checking: 'menu.checking',
+	authenticated: 'menu.logout',
+	anonymous: 'menu.login',
+	error: 'menu.check'
 }
 
 export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuProps) {
+	const { t } = useI18n()
 	const live = useContext(RadioLiveContext)
-	if (!live) throw new Error('电台菜单需要放在电台实时管线内')
+	if (!live) throw new Error(t('menu.outsideLive'))
 	const { reauthenticate } = live
 	const [dialog, setDialog] = useState<'login' | 'options' | 'logout' | null>(null)
 	const [sceneMotion, setSceneMotion] = useState(isSceneMotionEnabled)
@@ -51,12 +54,12 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 			if (!controller.signal.aborted) setStatus(loggedIn ? 'authenticated' : 'anonymous')
 		} catch {
 			if (controller.signal.aborted) return
-			const message = '登录状态检查失败，请重试'
+			const message = t('menu.loginFailed')
 			setStatus('error')
 			setErrorMessage(message)
 			toast.error(message)
 		}
-	}, [])
+	}, [t])
 
 	// 异步导入后在原点击位置打开菜单，首屏内容保持挂载
 	useEffect(() => {
@@ -83,8 +86,8 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 		setErrorMessage('')
 		setDialog(null)
 		reauthenticate()
-		toast.success('登录成功')
-	}, [reauthenticate])
+		toast.success(t('menu.loginSuccess'))
+	}, [reauthenticate, t])
 
 	const handleLogoutSuccess = () => {
 		statusRequest.current?.abort()
@@ -92,7 +95,7 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 		setErrorMessage('')
 		setDialog(null)
 		reauthenticate()
-		toast.success('退出登录成功')
+		toast.success(t('menu.logoutSuccess'))
 	}
 
 	return (
@@ -110,12 +113,12 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 					{live.playback?.mode === 'local' && !live.playbackPending && (
 						<ContextMenuItem onSelect={() => void live.returnToMain()}>
 							<RadioTower className="size-4" />
-							回主电台
+							{t('menu.toMain')}
 						</ContextMenuItem>
 					)}
 					<ContextMenuItem onSelect={onOpenRoaming}>
 						<Compass className="size-4" />
-						漫游所有歌曲
+						{t('menu.roaming')}
 					</ContextMenuItem>
 					<ContextMenuItem
 						onSelect={() => {
@@ -125,17 +128,17 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 							try {
 								localStorage.setItem(sceneMotionStorageKey, next ? 'on' : 'off')
 							} catch {
-								toast.warning('无法保存屏幕晃动偏好')
+								toast.warning(t('menu.motionSaveFailed'))
 							}
 						}}
 					>
 						<Waves className="size-4" />
-						{sceneMotion ? '关闭屏幕晃动' : '开启屏幕晃动'}
+						{sceneMotion ? t('menu.motionOff') : t('menu.motionOn')}
 					</ContextMenuItem>
 					{status === 'authenticated' && (
 						<ContextMenuItem onSelect={() => setDialog('options')}>
 							<Settings2 className="size-4" />
-							电台选项
+							{t('menu.options')}
 						</ContextMenuItem>
 					)}
 					<ContextMenuItem
@@ -146,7 +149,7 @@ export default function Menu({ position, onOpenRoaming, onRestoreFocus }: MenuPr
 						}}
 					>
 						{status === 'authenticated' ? <LogOut className="size-4" /> : <LogIn className="size-4" />}
-						{menuLabels[status]}
+						{t(menuLabels[status])}
 					</ContextMenuItem>
 					{errorMessage && (
 						<ContextMenuItem disabled className="max-w-64 whitespace-normal text-xs">

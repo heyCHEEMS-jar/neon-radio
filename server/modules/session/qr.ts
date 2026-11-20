@@ -1,12 +1,13 @@
+import type { ServerMessage } from '@neon-radio/protocol'
 import type { LoginQr } from '../../platform/netease/auth.js'
 import { createLoginQr, readLoginQrStatus } from '../../platform/netease/auth.js'
 import { AppError } from '../../platform/errors.js'
 import { revokeBrowserSession, type BrowserSession } from './browser-session.js'
 import { saveSessionCookie } from './service.js'
 
-interface QrStatus {
+export interface QrStatus {
 	code: number
-	message: string
+	message: ServerMessage
 	session?: BrowserSession | undefined
 }
 
@@ -22,12 +23,12 @@ const qrReuseInterval = 5_000
 const statusCacheInterval = 2_000
 const qrLifetime = 180_000
 const attempts = new Map<string, LoginAttempt>()
-const expiredMessage = '二维码已过期，请重新生成'
-const messages: Record<number, string> = {
+const expiredMessage: ServerMessage = { key: 'qr.expired' }
+const messages: Record<number, ServerMessage> = {
 	800: expiredMessage,
-	801: '请用网易云音乐 App 扫码，并在手机上确认。',
-	802: '已扫码，请在手机上确认',
-	803: '登录成功'
+	801: { key: 'qr.scan' },
+	802: { key: 'qr.scanned' },
+	803: { key: 'qr.success' }
 }
 
 // 服务关闭时清理全部二维码轮询状态
@@ -82,7 +83,7 @@ export async function checkQr(token: string, key: string): Promise<QrStatus> {
 				return { code: 800, message: expiredMessage }
 			}
 		}
-		return { code: status.code, message: messages[status.code] || '登录状态异常', session }
+		return { code: status.code, message: messages[status.code] || { key: 'qr.unknownStatus' }, session }
 	})()
 	attempt.poll = poll
 	try {
@@ -99,5 +100,5 @@ export async function checkQr(token: string, key: string): Promise<QrStatus> {
 export function assertQrAvailable(token: string) {
 	if (hasPendingQr(token)) return
 	const attempt = attempts.get(token)
-	if (attempt && Date.now() - attempt.time < qrReuseInterval) throw new AppError(429, '二维码生成过于频繁，请稍后重试')
+	if (attempt && Date.now() - attempt.time < qrReuseInterval) throw new AppError(429, { key: 'qr.rateLimited' })
 }

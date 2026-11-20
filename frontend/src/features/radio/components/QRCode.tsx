@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { checkLoginQr, createLoginQr, type LoginQr } from '@/features/radio/api'
+import { useI18n } from '@/i18n/context'
+import { ApiError } from '@/lib/api-error'
 import { debounce } from '@/lib/debounce'
 
 const pollInterval = 2_000
 
 export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
+	const { t, serverMessage } = useI18n()
 	const [qr, setQr] = useState<LoginQr | null>(null)
 	const [attempt, setAttempt] = useState(0)
 	const [busy, setBusy] = useState(true)
-	const [message, setMessage] = useState('正在生成二维码…')
+	const [message, setMessage] = useState(t('qr.generating'))
 	const generatingRef = useRef(true)
 	const generateQr = useMemo(
 		() =>
@@ -34,7 +37,7 @@ export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 
 		const showError = (error: unknown) => {
 			if (controller.signal.aborted) return
-			const errorMessage = error instanceof Error ? error.message : '登录请求失败'
+			const errorMessage = error instanceof ApiError ? serverMessage(error.serverMessage) : t('qr.generateFailed')
 			setMessage(errorMessage)
 			setQr(null)
 			toast.error(errorMessage)
@@ -44,7 +47,7 @@ export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 			try {
 				const result = await checkLoginQr(key, controller.signal)
 				if (controller.signal.aborted) return
-				setMessage(result.message ?? '请用网易云音乐 App 扫码，并在手机上确认。')
+				setMessage(result.message ? serverMessage(result.message) : t('qr.fallbackScan'))
 				if (result.code === 803) {
 					setQr(null)
 					onSuccess()
@@ -61,12 +64,12 @@ export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 			generatingRef.current = true
 			setQr(null)
 			setBusy(true)
-			setMessage('正在生成二维码…')
+			setMessage(t('qr.generating'))
 			try {
 				const data = await createLoginQr(controller.signal)
 				if (controller.signal.aborted) return
 				setQr(data)
-				setMessage('请用网易云音乐 App 扫码，并在手机上确认。')
+				setMessage(t('qr.fallbackScan'))
 				timer = setTimeout(() => void poll(data.key), pollInterval)
 			} catch (error: unknown) {
 				showError(error)
@@ -84,11 +87,11 @@ export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 			generateQr.cancel()
 			controller.abort()
 		}
-	}, [attempt, generateQr, onSuccess])
+	}, [attempt, generateQr, onSuccess, serverMessage, t])
 
 	return (
 		<div className="space-y-4">
-			{qr && <img src={qr.image} alt="网易云音乐登录二维码" width={240} height={240} className="mx-auto rounded-lg" />}
+			{qr && <img src={qr.image} alt={t('qr.imageAlt')} width={240} height={240} className="mx-auto rounded-lg" />}
 			<p role="status" className="text-sm text-zinc-500">
 				{message}
 			</p>
@@ -99,7 +102,7 @@ export default function QRCode({ onSuccess }: { onSuccess: () => void }) {
 				onClick={handleGenerate}
 				className="w-full cursor-pointer rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
 			>
-				{busy ? '生成中…' : '刷新二维码'}
+				{busy ? t('qr.busy') : t('qr.refresh')}
 			</button>
 		</div>
 	)

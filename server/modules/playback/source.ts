@@ -38,7 +38,7 @@ export async function getRadioAudio(song: { id: string; durationMs: number }): P
 	// 主线准备和多个听众共用同一次取链
 	const request = withSessionCookie(value => fetchSongAudio(song.id, value, song.durationMs))
 		.then(source => {
-			if (getSessionCookie() !== cookie) throw new AppError(409, '登录状态已更新，请重试')
+			if (getSessionCookie() !== cookie) throw new AppError(409, { key: 'session.updated' })
 			entry.source = source
 			entry.expiresAt = source.expiresAt
 			return source

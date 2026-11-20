@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
-import type { RadioSong } from '@neon-radio/protocol'
-import { isRecord } from '@neon-radio/protocol'
+import type { RadioSong, ServerMessage } from '@neon-radio/protocol'
+import { formatMessage, isRecord } from '@neon-radio/protocol'
 import config from '../../config.js'
 import { createLogger } from '../../platform/logger.js'
 import { fetchRoamingSongIds, fetchSongDetails } from '../../platform/netease/roaming.js'
@@ -11,7 +11,7 @@ import { readRoamingSongDetails, readRoamingSongs, replaceRoamingSongs } from '.
 
 export interface ManualRoamingSync {
 	id: string
-	refreshError: string | null
+	refreshError: ServerMessage | null
 	refreshDetails?: boolean
 }
 
@@ -56,7 +56,7 @@ async function runSync() {
 			publishNeteaseSync({
 				id: manualSync.id,
 				phase: 'syncing',
-				message: manualSync.refreshError ? 'Cookie 刷新失败，正在后台同步歌曲…' : 'Cookie 已刷新，正在后台同步歌曲…'
+				message: manualSync.refreshError ? { key: 'sync.syncingAfterRefreshFailed' } : { key: 'sync.syncing' }
 			})
 		}
 		try {
@@ -89,24 +89,27 @@ async function runSync() {
 			} catch (error: unknown) {
 				logger.warn('清理下线歌曲缓存失败：' + (error instanceof Error ? error.message : '数据库请求失败'))
 			}
-			const message = `已读取 ${playlistCount} 个歌单、${ids.length} 首歌曲，去重后入库 ${songs.size} 首，本次获取 ${fetched.length} 首详情`
-			logger.info(message)
+			const summary: ServerMessage = {
+				key: 'sync.summary',
+				params: { playlists: playlistCount, songs: ids.length, stored: songs.size, fetched: fetched.length }
+			}
+			logger.info(formatMessage(summary, 'zh'))
 			if (manualSync) {
 				publishNeteaseSync({
 					id: manualSync.id,
 					phase: manualSync.refreshError ? 'error' : 'success',
-					message: manualSync.refreshError ? `Cookie 刷新失败：${manualSync.refreshError}；${message}` : message
+					message: manualSync.refreshError ? { key: 'sync.summaryAfterRefreshFailed', params: { error: manualSync.refreshError, summary } } : summary
 				})
 			}
 		} catch (error: unknown) {
 			// 不记录网易云原始响应，避免 Cookie 被写入日志
 			logger.warn(`失败，保留上次列表：${error instanceof Error ? error.message : '网易云请求失败'}`)
 			if (manualSync) {
-				const message = `歌曲同步失败，保留上次列表：${readNeteaseSyncError(error)}`
+				const failure: ServerMessage = { key: 'sync.failed', params: { error: readNeteaseSyncError(error) } }
 				publishNeteaseSync({
 					id: manualSync.id,
 					phase: 'error',
-					message: manualSync.refreshError ? `Cookie 刷新失败：${manualSync.refreshError}；${message}` : message
+					message: manualSync.refreshError ? { key: 'sync.failedAfterRefreshFailed', params: { error: manualSync.refreshError, detail: failure } } : failure
 				})
 			}
 		}

@@ -7,6 +7,7 @@ import DraggableGrid from '@/components/vendor/originkit/ui/DraggableGrid'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { RadioLiveContext } from '@/features/radio/live/useRadioLive'
+import { useI18n } from '@/i18n/context'
 
 export interface RoamingProps {
 	open: boolean
@@ -23,8 +24,9 @@ function normalizeSearch(value: string) {
 }
 
 export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
+	const { t } = useI18n()
 	const live = useContext(RadioLiveContext)
-	if (!live) throw new Error('漫游需要放在电台实时管线内')
+	if (!live) throw new Error(t('roaming.outsideLive'))
 	const dialogRef = useRef<HTMLDialogElement>(null)
 	const initialSongId = useRef(live.playback?.song?.id ?? null)
 	const [focus, setFocus] = useState<{ id: string; request: number } | null>(null)
@@ -86,10 +88,10 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 		>
 			<header className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-5rem)] items-center gap-2 rounded-xl bg-black/60 px-3 py-2.5">
 				<h2 id="roaming-title" className="sr-only">
-					漫游所有歌曲
+					{t('roaming.title')}
 				</h2>
 				<p id="roaming-description" className="sr-only">
-					搜索歌名或歌手，点击封面切换播放，Esc 退出
+					{t('roaming.description')}
 				</p>
 				<div className="relative w-full min-w-0 max-w-50">
 					<Input
@@ -98,8 +100,8 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 						onKeyDown={event => {
 							if (event.key === 'Enter' && results[0]) jumpTo(results[0].id)
 						}}
-						placeholder="搜索歌名或歌手"
-						aria-label="搜索漫游歌曲"
+						placeholder={t('roaming.searchPlaceholder')}
+						aria-label={t('roaming.searchLabel')}
 						className="h-9 border-white/20 bg-white/95 text-sm text-zinc-900 placeholder:text-zinc-500"
 					/>
 					{query.trim() && (
@@ -117,7 +119,7 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 									</button>
 								))
 							) : (
-								<p className="px-3 py-2 text-sm text-zinc-500">没有匹配的歌曲</p>
+								<p className="px-3 py-2 text-sm text-zinc-500">{t('roaming.noMatch')}</p>
 							)}
 						</div>
 					)}
@@ -133,7 +135,7 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 					className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-sm hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-40"
 				>
 					<RadioTower className="size-4" />
-					回主电台
+					{t('menu.toMain')}
 				</button>
 			</header>
 			<motion.div
@@ -150,18 +152,18 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 				<div className="grid h-full place-items-center text-sm text-neutral-500" role="status">
 					{live.status === 'error' ? (
 						<button type="button" onClick={live.reconnect} className="cursor-pointer underline underline-offset-4">
-							歌曲列表连接失败，点击重试
+							{t('roaming.loadFailedRetry')}
 						</button>
 					) : (
 						<div className="flex flex-col items-center gap-3">
 							<Spinner className="size-6" aria-hidden="true" />
-							<span>正在加载歌曲列表…</span>
+							<span>{t('roaming.loading')}</span>
 						</div>
 					)}
 				</div>
 			) : items.length === 0 ? (
 				<div className="grid h-full place-items-center text-sm text-neutral-500" role="status">
-					暂无歌曲，等待电台同步
+					{t('roaming.empty')}
 				</div>
 			) : (
 				<DraggableGrid
@@ -191,7 +193,7 @@ export default function Roaming({ open, onClose, onEntered }: RoamingProps) {
 			</motion.div>
 			<button
 				type="button"
-				aria-label="关闭漫游"
+				aria-label={t('roaming.close')}
 				onClick={() => dialogRef.current?.close()}
 				className="absolute right-4 top-4 z-20 cursor-pointer rounded-full bg-black/60 p-3 opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40"
 			>

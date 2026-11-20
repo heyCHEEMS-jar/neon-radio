@@ -1,4 +1,4 @@
-import { isRecord } from '@neon-radio/protocol'
+import { isRecord, type ServerMessage } from '@neon-radio/protocol'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { checkBrowserQr, startBrowserQr } from '../modules/session/index.js'
 import { AppError } from '../platform/errors.js'
@@ -15,14 +15,14 @@ function assertQrThrottle(ip: string) {
 		if (now - time >= qrThrottleInterval) generationTimes.delete(visitor)
 	}
 	const previous = generationTimes.get(ip)
-	if (previous !== undefined && now - previous < qrThrottleInterval) throw new AppError(429, '二维码生成过于频繁，请稍后重试')
+	if (previous !== undefined && now - previous < qrThrottleInterval) throw new AppError(429, { key: 'qr.rateLimited' })
 	generationTimes.set(ip, now)
 }
 
 // 拦截原生扫码 Key 和状态接口，转交扫码流程，不返回账号 Cookie
 export default async function neteaseQrCompat(request: FastifyRequest, reply: FastifyReply) {
 	const path = normalizeRequestPath(request.url)
-	if (!path) return reply.code(400).send({ code: 400, message: '请求路径不合法' })
+	if (!path) return reply.code(400).send({ code: 400, message: { key: 'request.invalidPath' } })
 	if (!['/neon-radio/ncm/login/qr/key', '/neon-radio/ncm/login/qr/check'].includes(path)) return
 
 	reply.header('Cache-Control', 'no-store')
@@ -36,12 +36,13 @@ export default async function neteaseQrCompat(request: FastifyRequest, reply: Fa
 			return reply.send({ code: 200, data: { code: 200, unikey: qr.key } })
 		}
 		const key = isRecord(request.query) && typeof request.query.key === 'string' ? request.query.key : ''
-		if (!key) return reply.code(400).send({ code: 400, message: '请通过查询参数提供二维码 Key' })
+		if (!key) return reply.code(400).send({ code: 400, message: { key: 'qr.keyRequired' } })
 		const result = await checkBrowserQr(readRequestToken(request), key)
 		if (result.session) setBrowserToken(request, reply, result.session)
 		return reply.send({ code: result.code, message: result.message })
 	} catch (error: unknown) {
 		const status = error instanceof AppError ? error.status : 502
-		return reply.code(status).send({ code: status, message: error instanceof Error ? error.message : '扫码接口请求失败' })
+		const message: ServerMessage = error instanceof AppError ? error.serverMessage : { key: 'qr.requestFailed' }
+		return reply.code(status).send({ code: status, message })
 	}
 }

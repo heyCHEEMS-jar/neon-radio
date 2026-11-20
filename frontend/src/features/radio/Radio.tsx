@@ -4,6 +4,8 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import { Toaster } from 'sonner'
 import { RadioAudioContext, sceneMotionStorageKey, setSceneMotionEnabled } from '@/audio'
 import useRadioAudio from '@/audio/useRadioAudio'
+import LocaleToggle from '@/i18n/LocaleToggle'
+import { useI18n } from '@/i18n/context'
 import { visualizerConfig } from '@/audio/visualizer/config'
 import useRadioLive, { RadioLiveContext } from '@/features/radio/live/useRadioLive'
 import { RadioSceneContext, RoamingContext, SceneRefContext } from './scene'
@@ -22,9 +24,10 @@ export interface MenuPosition {
 
 // 漫游代码加载失败时保留关闭入口
 function LoadError({ open, onClose }: RoamingProps) {
+	const { t } = useI18n()
 	return open ? (
 		<button type="button" onClick={onClose} className="fixed left-4 top-4 z-50 rounded-lg bg-black/70 p-3 text-sm text-white">
-			漫游加载失败，请刷新并重试
+			{t('roaming.loadFailed')}
 		</button>
 	) : null
 }
@@ -120,6 +123,7 @@ export default function Radio({ children }: { children: ReactNode }) {
 						</RoamingContext.Provider>
 					</RadioSceneContext.Provider>
 				</div>
+				{!roaming && <LocaleToggle className="fixed right-4 top-4 z-40" />}
 				<Player visible={!roaming} />
 				<Lyrics visible={!roaming} />
 				<Listeners visible={!roaming && audio.started} />

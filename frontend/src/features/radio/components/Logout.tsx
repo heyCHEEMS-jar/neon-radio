@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { logout } from '@/features/radio/api'
+import { useI18n } from '@/i18n/context'
 
 interface LogoutProps {
 	onClose: () => void
@@ -11,6 +12,7 @@ interface LogoutProps {
 }
 
 export default function Logout({ onClose, onSuccess }: LogoutProps) {
+	const { t } = useI18n()
 	const [loggingOut, setLoggingOut] = useState(false)
 	const pending = useRef(false)
 	const requestRef = useRef<AbortController | null>(null)
@@ -28,7 +30,7 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 			await logout(controller.signal)
 			if (!controller.signal.aborted) onSuccess()
 		} catch {
-			if (!controller.signal.aborted) toast.error('退出登录失败，请重试')
+			if (!controller.signal.aborted) toast.error(t('login.logoutFailed'))
 		} finally {
 			pending.current = false
 			if (!controller.signal.aborted) setLoggingOut(false)
@@ -43,8 +45,8 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 			}}
 		>
 			<DialogContent role="alertdialog" showCloseButton={false}>
-				<DialogTitle>退出登录</DialogTitle>
-				<DialogDescription>确定要退出登录吗？退出后需要重新扫码登录电台。</DialogDescription>
+				<DialogTitle>{t('login.logoutTitle')}</DialogTitle>
+				<DialogDescription>{t('login.logoutDescription')}</DialogDescription>
 				<div className="flex justify-end gap-2">
 					<button
 						type="button"
@@ -54,7 +56,7 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 						}}
 						className="cursor-pointer rounded-md border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
 					>
-						取消
+						{t('common.cancel')}
 					</button>
 					<button
 						type="button"
@@ -62,7 +64,7 @@ export default function Logout({ onClose, onSuccess }: LogoutProps) {
 						onClick={handleLogout}
 						className="cursor-pointer rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
 					>
-						{loggingOut ? '正在退出…' : '确认退出'}
+						{loggingOut ? t('login.loggingOut') : t('login.confirmLogout')}
 					</button>
 				</div>
 			</DialogContent>

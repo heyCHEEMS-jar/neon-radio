@@ -8,17 +8,21 @@
   <h1>Neon Radio</h1>
   <p>面向固定网易云账号的个人网页电台：主线播放、游客漫游、歌单同步与音频冲击可视化。</p>
   <p>
-    <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
-    <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
-    <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-    <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
-    <img src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
-    <img src="https://img.shields.io/badge/WebSocket-live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
-    <img src="https://img.shields.io/badge/MySQL-database-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
-    <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
-    <img src="https://img.shields.io/badge/pnpm-workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
-    <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
+    <img src="https://img.shields.io/badge/-React%2019-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
+    <img src="https://img.shields.io/badge/-Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+    <img src="https://img.shields.io/badge/-TypeScript%206-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6" />
+    <img src="https://img.shields.io/badge/-Tailwind%20CSS%204-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+    <img src="https://img.shields.io/badge/-Fastify%205-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
+    <img src="https://img.shields.io/badge/-WebSocket%20live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
+    <img src="https://img.shields.io/badge/-MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+    <img src="https://img.shields.io/badge/-Drizzle%20ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
+    <img src="https://img.shields.io/badge/-pnpm%20workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
+    <img src="https://img.shields.io/badge/-Node.js%2020+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
   </p>
+</div>
+
+<div align="center">
+  <img src="./docs/images/showcase.gif" alt="Neon Radio 演示：主线播放与音频冲击可视化" width="100%" />
 </div>
 
 ## 快速开始

@@ -65,7 +65,7 @@ export function createPool(fastify: FastifyInstance): LivePool {
 			}
 			if (connection.authorized) {
 				connection.authorized = false
-				pool.send(connection, { type: 'auth-required', message: '登录已失效，请重新扫码登录' })
+				pool.send(connection, { type: 'auth-required', message: { key: 'auth.sessionExpired' } })
 			}
 			return false
 		},

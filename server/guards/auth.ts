@@ -26,7 +26,7 @@ const publicGetPrefixes = [
 // 业务接口要求管理员会话；扫码和公开媒体目录直接放行
 export default async function browserAuth(request: FastifyRequest, reply: FastifyReply) {
 	const path = normalizeRequestPath(request.url)
-	if (!path) return reply.code(400).send({ code: 400, message: '请求路径不合法' })
+	if (!path) return reply.code(400).send({ code: 400, message: { key: 'request.invalidPath' } })
 	const isPublic =
 		publicPaths.includes(path) ||
 		publicPrefixes.some(prefix => path.startsWith(prefix)) ||
@@ -37,9 +37,9 @@ export default async function browserAuth(request: FastifyRequest, reply: Fastif
 	try {
 		if (getSessionStatus().loggedIn && (await hasBrowserSession(readRequestToken(request)))) return
 	} catch {
-		return reply.code(503).send({ code: 503, message: '登录状态检查失败，请重试' })
+		return reply.code(503).send({ code: 503, message: { key: 'auth.checkFailed' } })
 	}
-	return reply.code(401).send({ code: 401, message: '请先扫码登录电台' })
+	return reply.code(401).send({ code: 401, message: { key: 'auth.loginRequired' } })
 }
 
 // 鉴权失败时清除失效 Cookie，保留仍在扫码的临时标识

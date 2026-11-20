@@ -3,6 +3,7 @@
 import { animate, motion, useDragControls, useMotionValue } from 'framer-motion'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { Spinner } from '@/components/ui/spinner'
+import { useI18n } from '@/i18n/context'
 import styles from '@/styles/draggable-grid.module.css'
 import TiltedCard from './TiltedCard'
 
@@ -175,6 +176,7 @@ export default function DraggableGrid({
 	active = true,
 	style
 }: DraggableGridProps) {
+	const { t } = useI18n()
 	const containerRef = useRef<HTMLDivElement>(null)
 	const x = useMotionValue(0)
 	const y = useMotionValue(0)
@@ -442,7 +444,7 @@ export default function DraggableGrid({
 		<div ref={containerRef} aria-busy={active && !imagesReady} onPointerDown={handlePointerDown} style={wrapperStyle}>
 			{active && !imagesReady && (
 				<div className="pointer-events-none absolute inset-0 grid place-items-center text-neutral-500">
-					<Spinner className="size-6" aria-label="正在准备封面" />
+					<Spinner className="size-6" aria-label={t('cover.preparing')} />
 				</div>
 			)}
 			<motion.div
@@ -523,9 +525,9 @@ export default function DraggableGrid({
 									}}
 								>
 									{src && !failed ? (
-										<Spinner className="relative z-0 size-8" aria-label="正在加载封面" />
+										<Spinner className="relative z-0 size-8" aria-label={t('cover.loading')} />
 									) : (
-										<span className="relative z-0 text-sm">暂无封面</span>
+										<span className="relative z-0 text-sm">{t('cover.missing')}</span>
 									)}
 								</TiltedCard>
 							</div>

@@ -9,9 +9,9 @@ export default async function radioImpactsRoutes(fastify: FastifyInstance) {
 	fastify.get<{ Params: { songId: string } }>('/radio-impacts/:songId', async request => {
 		const songId = request.params.songId
 		const song = getRoamingSongs().find(item => item.id === songId) ?? getMainPlayback().song
-		if (!song || song.id !== songId) throw new AppError(404, '歌曲已不在电台列表中')
+		if (!song || song.id !== songId) throw new AppError(404, { key: 'song.notInRadio' })
 		const timeline = await getTimeline(songId)
-		if (!timeline) throw new AppError(404, '歌曲震动时间轴尚未分析')
+		if (!timeline) throw new AppError(404, { key: 'impacts.pending' })
 		return { code: 200, data: timeline }
 	})
 }
