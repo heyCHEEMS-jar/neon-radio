@@ -1,12 +1,17 @@
-// 业务错误：入口层直接按 status/code 输出，不再猜测上游对象结构
+import { formatMessage, type ServerMessage } from '@neon-radio/protocol'
+
+// 业务错误：入口层直接按 status/code 输出，不再猜测上游对象结构；message 为中文原文供日志
 export class AppError extends Error {
+	readonly serverMessage: ServerMessage
+
 	constructor(
 		readonly status: number,
-		message: string,
+		message: ServerMessage,
 		readonly code = status
 	) {
-		super(message)
+		super(formatMessage(message, 'zh'))
 		this.name = 'AppError'
+		this.serverMessage = message
 	}
 }
 
@@ -20,5 +25,15 @@ export class UpstreamError extends Error {
 		super(message, cause === undefined ? undefined : { cause })
 		this.name = 'UpstreamError'
 		this.kind = kind
+	}
+}
+
+// 限流插件抛出的错误，携带可本地化的提示和 429 状态码
+export class RateLimitError extends Error {
+	readonly statusCode = 429
+
+	constructor(readonly serverMessage: ServerMessage) {
+		super(formatMessage(serverMessage, 'zh'))
+		this.name = 'RateLimitError'
 	}
 }

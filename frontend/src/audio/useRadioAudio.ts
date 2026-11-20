@@ -1,8 +1,11 @@
 'use client'
 
+import type { ServerMessage } from '@neon-radio/protocol'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { getPlaybackPosition, type RadioLiveState } from '@/features/radio/live/useRadioLive'
+import { serverMessage } from '@/i18n'
+import { messageOf } from '@/lib/api-error'
 import { createAnalyser, fetchAudioSource, getPlayableRange as readPlayableRange } from './engine'
 import { fetchImpactTimeline, type RadioImpactFrame, type RadioImpactTimeline } from './impacts'
 import type { RadioAudioState } from './types'
@@ -12,7 +15,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 	const [started, setStarted] = useState(false) // 首次点击后解除模糊并把播放器移到底部
 	const [playing, setPlaying] = useState(false) // 浏览器确认的真实播放状态
 	const [loading, setLoading] = useState(false) // 取链、加载和缓冲状态
-	const [error, setError] = useState<string | null>(null) // 可重试的播放错误
+	const [error, setError] = useState<ServerMessage | null>(null) // 可重试的播放错误
 	const [retry, setRetry] = useState(0) // 点击重试时重新解析音源
 	const [range, setRange] = useState({ start: 0, end: 0 }) // 媒体元数据就绪后更新进度条的可播区间
 	const trialRef = useRef<{ start: number; end: number } | null>(null) // 网易云给出的试听边界，不额外维护播放时钟
@@ -46,13 +49,13 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 				(cause instanceof DOMException && cause.name === 'AbortError')
 			)
 				return
-			const message = '播放未能启动，请再次点击播放' // 保留用户手势重试入口
+			const message: ServerMessage = { key: 'audio.startFailed' } // 保留用户手势重试入口
 			setPlaying(false)
 			setLoading(false)
 			setError(message)
-			toast.error(message)
+			toast.error(serverMessage(message))
 		})
-	}, [audioRef, readRange])
+	}, [audioRef, readRange, serverMessage])
 
 	// 新实例需要定位；主线始终按当前逻辑进度续播，包括首次点击和试听曲
 	const syncPlayback = useCallback(() => {
@@ -133,11 +136,11 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 		// 媒体解析或 CDN 请求失败时保留重试入口
 		const onError = () => {
 			if (!sourceIdRef.current) return
-			const message = '音源播放失败，请重试；请确认曲源权限及浏览器跨域支持'
+			const message: ServerMessage = { key: 'audio.mediaFailed' }
 			setPlaying(false)
 			setLoading(false)
 			setError(message)
-			if (wantedRef.current) toast.error(message)
+			if (wantedRef.current) toast.error(serverMessage(message))
 		}
 		audio.addEventListener('loadedmetadata', ready)
 		audio.addEventListener('canplay', ready)
@@ -166,7 +169,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 				contextRef.current = null
 			}
 		}
-	}, [advanceLocal, audioRef, play, readRange, syncPlayback])
+	}, [advanceLocal, audioRef, play, readRange, serverMessage, syncPlayback])
 
 	// 每个播放实例核对一次音源有效期，地址相同时复用媒体，不打断 seek 或单曲循环
 	useEffect(() => {
@@ -195,7 +198,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 				if (controller.signal.aborted || liveRef.current.playback?.song?.id !== songId) return
 				const wasTrial = Boolean(trialRef.current) // 单曲循环不反复弹试听提示
 				trialRef.current = source.trial // 只有真实试听版本才显示提示
-				if (source.trial && (!sameSong || !wasTrial)) toast.info('当前歌曲为试听版本', { description: liveRef.current.playback?.song?.name })
+				if (source.trial && (!sameSong || !wasTrial)) toast.info(serverMessage({ key: 'audio.trial' }), { description: liveRef.current.playback?.song?.name })
 				sourceIdRef.current = songId
 				setError(null)
 				if (audio.src !== source.src || audio.error) {
@@ -213,14 +216,14 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 			} catch (cause: unknown) {
 				if (controller.signal.aborted || liveRef.current.playback?.song?.id !== songId) return
 				if (sameSong && audio.readyState >= 1 && !audio.error) return // 当前音频仍可播时不因刷新失败打断
-				const message = cause instanceof Error ? cause.message : '音源请求失败'
+				const message = messageOf(cause, { key: 'audio.requestFailed' })
 				setLoading(false)
 				setError(message)
-				if (wantedRef.current) toast.error(message)
+				if (wantedRef.current) toast.error(serverMessage(message))
 			}
 		})()
 		return () => controller.abort()
-	}, [audioRef, live.playback?.playbackId, live.playback?.song?.id, live.playback?.song?.durationMs, play, readRange, retry, syncPlayback])
+	}, [audioRef, live.playback?.playbackId, live.playback?.song?.id, live.playback?.song?.durationMs, play, readRange, retry, serverMessage, syncPlayback])
 
 	// 播放实例或分析结果更新时读取时间轴，缺失时不触发冲击
 	useEffect(() => {
@@ -247,7 +250,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 		if (!audio) return
 		setStarted(true)
 		if (!liveRef.current.playback?.song) {
-			toast.info('电台暂无歌曲，请先登录并同步歌单')
+			toast.info(serverMessage({ key: 'audio.noSongs' }))
 			return
 		}
 		if (wantedRef.current && !error) {
@@ -266,8 +269,8 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 			} catch {
 				if (contextRef.current) void contextRef.current.close().catch(() => undefined)
 				contextRef.current = null
-				setError('音频初始化失败，请重试')
-				toast.error('音频初始化失败，请重试')
+				setError({ key: 'audio.initFailed' })
+				toast.error(serverMessage({ key: 'audio.initFailed' }))
 				return
 			}
 		}
@@ -276,8 +279,8 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 			if (audioRef.current !== audio || !wantedRef.current) return
 			wantedRef.current = false
 			audio.pause()
-			setError('音频未能解锁，请再次点击播放')
-			toast.error('音频未能解锁，请再次点击播放')
+			setError({ key: 'audio.locked' })
+			toast.error(serverMessage({ key: 'audio.locked' }))
 		})
 		if (error && (audio.error || !sourceIdRef.current)) {
 			setRetry(value => value + 1)
@@ -287,7 +290,7 @@ export default function useRadioAudio(live: RadioLiveState, audioRef: RefObject<
 		syncPlayback()
 		play()
 		advanceLocal()
-	}, [advanceLocal, audioRef, error, play, readRange, syncPlayback])
+	}, [advanceLocal, audioRef, error, play, readRange, serverMessage, syncPlayback])
 
 	// 每个绘制帧共享一份原始频谱和实际采样率，暂停或上下文挂起时输出静音
 	const readSpectrum = useCallback(

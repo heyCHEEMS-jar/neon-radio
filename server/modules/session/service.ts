@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import config, { validateConfig } from '../../config.js'
 import { decryptCookie, decodeKey, encryptCookie } from '../../platform/crypto.js'
+import type { ServerMessage } from '@neon-radio/protocol'
 import { AppError, UpstreamError } from '../../platform/errors.js'
 import { readNeteaseAccount, refreshNeteaseCookie } from '../../platform/netease/auth.js'
 import { isNeteaseCookie } from '../../platform/netease/cookie.js'
@@ -44,10 +45,10 @@ async function persistCookie(value: string) {
 
 // 校验凭证和固定账号，原始接口响应由适配层处理
 async function validateCookie(value: string) {
-	if (!isNeteaseCookie(value)) throw new AppError(401, '网易云登录 Cookie 无效')
+	if (!isNeteaseCookie(value)) throw new AppError(401, { key: 'session.cookieInvalid' })
 	const account = await readNeteaseAccount(value)
-	if (account.uid !== config.NETEASE_UID) throw new AppError(403, '扫码账号与电台 UID 不匹配，登录失败')
-	if (!isNeteaseCookie(account.cookie)) throw new AppError(401, '网易云登录已失效')
+	if (account.uid !== config.NETEASE_UID) throw new AppError(403, { key: 'session.uidMismatch' })
+	if (!isNeteaseCookie(account.cookie)) throw new AppError(401, { key: 'session.expired' })
 	return account.cookie
 }
 
@@ -77,7 +78,7 @@ export function getSessionStatus() {
 
 // 读取服务端网易云凭证，未登录时拒绝请求
 export function getSessionCookie() {
-	if (!cookie) throw new AppError(401, '请打开登录弹窗扫码登录电台账号')
+	if (!cookie) throw new AppError(401, { key: 'session.loginFirst' })
 	return cookie
 }
 
@@ -136,16 +137,16 @@ export async function withSessionCookie<T>(request: (value: string) => Promise<T
 // 手动同步全局节流 30 秒，失败后允许立即重试，在途任务继续复用
 export function startNeteaseSync() {
 	getSessionCookie()
-	if (isRoamingSyncing()) throw new AppError(429, '正在同步网易云数据，请稍后再试')
+	if (isRoamingSyncing()) throw new AppError(429, { key: 'sync.busy' })
 	const current = getNeteaseSyncState()
 	const now = Date.now()
 	const remainingMs = nextManualSyncAt - now
 	if (remainingMs > 0 && current?.phase !== 'error') {
-		throw new AppError(429, `同步数据过于频繁，请 ${Math.ceil(remainingMs / 1000)} 秒后重试`)
+		throw new AppError(429, { key: 'sync.tooFrequent', params: { seconds: Math.ceil(remainingMs / 1000) } })
 	}
 	nextManualSyncAt = now + 30_000
-	if (current?.phase === 'refreshing' || current?.phase === 'syncing') throw new AppError(429, '正在同步网易云数据，请稍后再试')
-	const state = publishNeteaseSync({ id: randomUUID(), phase: 'refreshing', message: '正在刷新网易云 Cookie…' })
+	if (current?.phase === 'refreshing' || current?.phase === 'syncing') throw new AppError(429, { key: 'sync.busy' })
+	const state = publishNeteaseSync({ id: randomUUID(), phase: 'refreshing', message: { key: 'sync.refreshing' } })
 	refreshSession(state.id).catch(() => console.warn('[漫游同步] 手动刷新网易云 Cookie 失败'))
 	return state
 }
@@ -157,10 +158,10 @@ export function refreshSession(syncId: string | null = null) {
 	refresh = updateSession(async () => {
 		// 请求网易云前先推旧列表，推送失败不阻止凭证刷新和后台同步
 		await publishRoamingSongs().catch(() => console.warn('[漫游同步] 旧歌曲列表推送失败，继续刷新'))
-		let refreshError: string | null = null
+		let refreshError: ServerMessage | null = null
 		try {
 			if (!cookie) {
-				refreshError = '网易云登录已失效，请重新扫码'
+				refreshError = { key: 'upstream.expired' }
 				return
 			}
 			const refreshedCookie = await refreshNeteaseCookie(cookie)
@@ -181,10 +182,13 @@ export function refreshSession(syncId: string | null = null) {
 					publishNeteaseSync({
 						id: manualId,
 						phase: 'error',
-						message: refreshError ? `Cookie 刷新失败：${refreshError}；正在同步歌曲，请稍后再试` : '正在同步歌曲，请稍后再试'
+						message: refreshError
+							? { key: 'sync.pendingAfterRefreshFailed', params: { error: refreshError } }
+							: { key: 'sync.pending' }
 					})
 				}
-			} else if (manualId) publishNeteaseSync({ id: manualId, phase: 'error', message: refreshError || '网易云登录已失效，请重新扫码' })
+			} else if (manualId)
+				publishNeteaseSync({ id: manualId, phase: 'error', message: refreshError ?? { key: 'upstream.expired' } })
 		}
 	})
 	return refresh

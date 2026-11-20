@@ -3,6 +3,7 @@
 import type { LiveEvent, NeteaseSyncState, PlaybackOrder, PlaybackSnapshot, PlaybackState, RadioListeners, RadioOptions, RadioSong } from '@neon-radio/protocol'
 import { createContext, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
+import { serverMessage, t } from '@/i18n'
 import { appendHistory, moveHistory, type HistoryAction, type PlaybackHistory } from './history'
 import { readLocalPlaybackOrder, saveLocalPlaybackOrder } from './preferences'
 import { parseLiveEvent } from './protocol'
@@ -102,8 +103,8 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 	// 只更新当前页面与浏览器存储，不向服务端提交电台配置
 	const setLocalPlaybackOrder = useCallback((order: PlaybackOrder) => {
 		updateLocalPlaybackOrder(order)
-		if (!saveLocalPlaybackOrder(order)) toast.warning('无法保存本地播放偏好', { description: '当前页面仍生效，刷新后将恢复单曲循环。' })
-	}, [])
+		if (!saveLocalPlaybackOrder(order)) toast.warning(t('live.prefSaveFailed'), { description: t('live.prefSaveFailedDetail') })
+	}, [t])
 
 	// 有真实音频时读取实际位置，重连和管理员推送不再使用估算进度
 	const getCurrentPlayback = useCallback(() => {
@@ -230,7 +231,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 			const timer = setTimeout(() => {
 				if (!playbackRequestsRef.current.has(requestId)) return
 				finishPlaybackRequest(requestId, false)
-				if (!restoring) toast.warning('播放请求未确认', { description: '保持原来的播放状态，重连后可再次尝试。' })
+				if (!restoring) toast.warning(t('live.requestUnconfirmed'), { description: t('live.requestUnconfirmedDetail') })
 				socket.close()
 			}, 15_000)
 			playbackRequestsRef.current.set(requestId, { mode: request.mode, restoring, historyAction, timer, resolve: resolveRequest })
@@ -239,7 +240,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				socket.send(JSON.stringify({ requestId, ...request }))
 			} catch {
 				finishPlaybackRequest(requestId, false)
-				if (!restoring) toast.error('播放请求发送失败，请重连后重试')
+				if (!restoring) toast.error(t('live.requestSendFailed'))
 				socket.close()
 			}
 			return result
@@ -290,10 +291,10 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 			if (state.phase === 'success') setSuccessfulSyncId(state.id)
 			if (previous?.id === state.id && previous.phase === state.phase) return
 			noticeRef.current = { id: state.id, phase: state.phase }
-			const notice = { id: 'netease-sync', description: state.message }
-			if (running) toast.loading('正在同步网易云数据', notice)
-			else if (state.phase === 'success') toast.success('网易云数据同步完成', notice)
-			else toast.error('网易云数据同步失败', notice)
+			const notice = { id: 'netease-sync', description: serverMessage(state.message) }
+			if (running) toast.loading(t('live.syncRunning'), notice)
+			else if (state.phase === 'success') toast.success(t('live.syncSuccess'), notice)
+			else toast.error(t('live.syncFailed'), notice)
 		}
 		// 建立连接，重连时恢复已确认的路线
 		const connect = () => {
@@ -386,7 +387,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 								awaitingMainRef.current = true
 								if (deferredMainRef.current) applyPlayback(deferredMainRef.current)
 								deferredMainRef.current = null
-								toast.warning('未能恢复本地播放，已回到电台', { description: message.message ?? '请重新选择歌曲' })
+								toast.warning(t('live.restoreFailed'), { description: message.message ? serverMessage(message.message) : t('live.pickAgain') })
 							} else {
 								if (!playbackRequestsRef.current.size) {
 									if ((playbackRef.current?.mode === 'main' || awaitingMainRef.current) && deferredMainRef.current) {
@@ -396,7 +397,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 								}
 								// 游客点歌被漫游权限阻止时静默保留原播放，其他失败仍提示
 								if (message.code !== 401 || pending.mode !== 'local') {
-									toast.error('切换播放失败', { description: message.message ?? '请稍后重试' })
+									toast.error(t('live.changeFailed'), { description: message.message ? serverMessage(message.message) : t('live.tryLater') })
 								}
 							}
 							return
@@ -414,7 +415,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						if (pendingRef.current?.id !== message.requestId) return
 						clearPending()
 						if (message.code !== 202) {
-							toast.error('启动网易云同步失败', { description: message.message ?? '请稍后重试' })
+							toast.error(t('live.syncStartFailed'), { description: message.message ? serverMessage(message.message) : t('live.tryLater') })
 							if (message.code === 401) {
 								clearSync()
 								current.close()
@@ -424,7 +425,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 						clearPending()
 						clearPlaybackRequests()
 						clearSync()
-						toast.error('登录已失效', { description: message.message })
+						toast.error(t('live.authExpired'), { description: serverMessage(message.message) })
 						current.close()
 					}
 				} catch {
@@ -441,11 +442,11 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 				clearPlaybackRequests()
 				deferredMainRef.current = null
 				if (interruptedPlayback) {
-					toast.warning('播放请求连接中断', { description: '未确认的请求请重连后重试，已受理的主线操作不受页面断线影响。' })
+					toast.warning(t('live.playbackInterrupted'), { description: t('live.playbackInterruptedDetail') })
 				}
 				if (pendingRef.current) {
 					clearPending()
-					toast.warning('同步请求连接中断', { description: '任务可能仍在后台运行，重连后将恢复状态，请勿重复点击。' })
+					toast.warning(t('live.syncInterrupted'), { description: t('live.syncInterruptedDetail') })
 				}
 				setStatus('error')
 				timer = setTimeout(connect, 3000)
@@ -469,7 +470,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 			if (playbackRef.current?.song?.id === songId) return Promise.resolve(true)
 			const socket = socketRef.current
 			if (!socket || socket.readyState !== WebSocket.OPEN) {
-				toast.error('连接已断开，请稍后重试')
+				toast.error(t('live.disconnected'))
 				return Promise.resolve(false)
 			}
 			return startPlaybackRequest(socket, { type: 'playback-request', mode: 'local', songId })
@@ -546,7 +547,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		if (playbackRef.current?.mode === 'main') return Promise.resolve(true)
 		const socket = socketRef.current
 		if (!socket || socket.readyState !== WebSocket.OPEN) {
-			toast.error('连接已断开，请稍后重试')
+			toast.error(t('live.disconnected'))
 			return Promise.resolve(false)
 		}
 		return startPlaybackRequest(socket, { type: 'playback-request', mode: 'main' })
@@ -575,11 +576,11 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 	const enableMainPlaybackSync = useCallback(() => {
 		const socket = socketRef.current
 		if (status !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN) {
-			toast.error('连接已断开，请稍后重试')
+			toast.error(t('live.disconnected'))
 			return Promise.resolve(false)
 		}
 		if (playbackRequestsRef.current.size) {
-			toast.error('请等待当前播放操作完成后再开启主线同步')
+			toast.error(t('live.pendingBeforeSync'))
 			return Promise.resolve(false)
 		}
 		// 使用确认点击时的播放快照，不经过同歌曲免请求的选歌分支
@@ -596,14 +597,14 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 		if (pendingRef.current || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing') return
 		const socket = socketRef.current
 		if (status !== 'ready' || !socket || socket.readyState !== WebSocket.OPEN) {
-			toast.error('连接已断开，请稍后重试')
+			toast.error(t('live.disconnected'))
 			return
 		}
 		const requestId = crypto.randomUUID()
 		const timer = setTimeout(() => {
 			if (pendingRef.current?.id !== requestId) return
 			clearPending()
-			toast.warning('同步请求未确认', { description: '任务可能已经启动，重连后将恢复状态，请勿重复点击。' })
+			toast.warning(t('live.syncUnconfirmed'), { description: t('live.syncUnconfirmedDetail') })
 			socket.close()
 		}, 15_000)
 		pendingRef.current = { id: requestId, timer }
@@ -612,7 +613,7 @@ export default function useRadioLive(roamingOpen: boolean, audioRef: RefObject<H
 			socket.send(JSON.stringify({ type: 'netease-sync-request', requestId }))
 		} catch {
 			clearPending()
-			toast.error('同步请求发送失败，请重连后重试')
+			toast.error(t('live.syncSendFailed'))
 			socket.close()
 		}
 	}, [clearPending, neteaseSync?.phase, status])

@@ -26,10 +26,10 @@ export async function handlePlaybackRequest(pool: LivePool, connection: LiveConn
 		// 点歌必须仍在有效列表内；游客只受游客漫游开关约束
 		let song: RadioSong | null = null
 		if (command.mode === 'local') {
-			if (!authorized && !options.guestRoamingEnabled) throw new AppError(401, '请先扫码登录电台')
+			if (!authorized && !options.guestRoamingEnabled) throw new AppError(401, { key: 'auth.loginRequired' })
 			song = getRoamingSongs().find(item => item.id === command.songId) ?? null
-			if (!song) throw new AppError(404, '歌曲已不在漫游列表中')
-			if (!Number.isFinite(song.durationMs) || song.durationMs <= 0) throw new AppError(422, '歌曲时长无效，暂时无法播放')
+			if (!song) throw new AppError(404, { key: 'roaming.songMissing' })
+			if (!Number.isFinite(song.durationMs) || song.durationMs <= 0) throw new AppError(422, { key: 'playback.invalidDuration' })
 		}
 
 		if (authorized && options.forceMainPlaybackSyncEnabled && (command.mode === 'main' || !command.playbackId)) {
@@ -45,7 +45,7 @@ export async function handlePlaybackRequest(pool: LivePool, connection: LiveConn
 		if (song && command.mode === 'local') {
 			snapshot = await createLocalPlayback(song, command)
 			if (pool.closing || connection.socket.readyState !== WebSocket.OPEN) return
-			if (!authorized && !getRadioOptions().guestRoamingEnabled) throw new AppError(401, '游客自漫游未开启')
+			if (!authorized && !getRadioOptions().guestRoamingEnabled) throw new AppError(401, { key: 'roaming.guestDisabled' })
 			connection.local = snapshot
 		} else {
 			connection.local = null
@@ -53,7 +53,7 @@ export async function handlePlaybackRequest(pool: LivePool, connection: LiveConn
 		}
 		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 200, data: snapshot })
 	} catch (error: unknown) {
-		respondError(pool, connection, 'playback-response', command.requestId, error, '播放请求处理失败，请稍后重试')
+		respondError(pool, connection, 'playback-response', command.requestId, error, { key: 'playback.requestFailed' })
 	}
 }
 
@@ -62,7 +62,7 @@ export function handlePauseRequest(pool: LivePool, connection: LiveConnection, c
 	if (pool.closing) return
 	const current = connection.local ?? getMainPlayback()
 	if (!current.song) {
-		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 404, message: '当前没有可暂停的歌曲' })
+		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 404, message: { key: 'playback.nothingToPause' } })
 		return
 	}
 	const snapshot: PlaybackSnapshot = { ...current, mode: 'local', playbackId: randomUUID(), paused: true }
@@ -76,7 +76,7 @@ export async function handleNextRequest(pool: LivePool, connection: LiveConnecti
 	try {
 		// 只有当前本地实例可以申请续播
 		const current = connection.local
-		if (!current?.song || current.playbackId !== command.playbackId) throw new AppError(409, '播放实例已切换')
+		if (!current?.song || current.playbackId !== command.playbackId) throw new AppError(409, { key: 'playback.instanceChanged' })
 		const authorized = await pool.authorize(connection)
 		let snapshot: PlaybackSnapshot | null = null
 		if (authorized || getRadioOptions().guestRoamingEnabled) {
@@ -94,7 +94,7 @@ export async function handleNextRequest(pool: LivePool, connection: LiveConnecti
 		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 202, mode: 'main' })
 		pool.send(connection, { type: 'playback-state', data: getMainPlayback() })
 	} catch (error: unknown) {
-		respondError(pool, connection, 'playback-response', command.requestId, error, '自动切歌失败')
+		respondError(pool, connection, 'playback-response', command.requestId, error, { key: 'playback.nextFailed' })
 	}
 }
 
@@ -106,10 +106,10 @@ export async function handleSeekRequest(pool: LivePool, connection: LiveConnecti
 		const authorized = await pool.authorize(connection)
 		if (pool.closing) return
 		const options = getRadioOptions()
-		if (!authorized && !options.guestRoamingEnabled) throw new AppError(401, '游客自漫游未开启')
+		if (!authorized && !options.guestRoamingEnabled) throw new AppError(401, { key: 'roaming.guestDisabled' })
 		const current = connection.local ?? getMainPlayback()
 		if (!current.song || current.mode !== command.sourceMode || current.playbackId !== command.playbackId) {
-			throw new AppError(409, '歌曲已切换，请重新调整进度')
+			throw new AppError(409, { key: 'playback.songChanged' })
 		}
 		const positionMs = Math.min(current.song.durationMs, command.positionMs)
 		if (authorized && options.forceMainPlaybackSyncEnabled) {
@@ -122,12 +122,12 @@ export async function handleSeekRequest(pool: LivePool, connection: LiveConnecti
 		// 普通拖动原子切换到连接私有的本地播放，不修改主线
 		const snapshot = await createLocalPlayback(current.song, { playbackId: randomUUID(), positionMs, paused: command.paused })
 		if (pool.closing || connection.socket.readyState !== WebSocket.OPEN) return
-		if (!authorized && !getRadioOptions().guestRoamingEnabled) throw new AppError(401, '游客自漫游未开启')
-		if ((connection.local ?? getMainPlayback()).playbackId !== current.playbackId) throw new AppError(409, '歌曲已切换，请重新调整进度')
+		if (!authorized && !getRadioOptions().guestRoamingEnabled) throw new AppError(401, { key: 'roaming.guestDisabled' })
+		if ((connection.local ?? getMainPlayback()).playbackId !== current.playbackId) throw new AppError(409, { key: 'playback.songChanged' })
 		connection.local = snapshot
 		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 200, data: snapshot })
 	} catch (error: unknown) {
-		respondError(pool, connection, 'playback-response', command.requestId, error, '播放进度调整失败')
+		respondError(pool, connection, 'playback-response', command.requestId, error, { key: 'playback.seekFailed' })
 	}
 }
 
@@ -138,12 +138,12 @@ export async function handleMainSyncRequest(pool: LivePool, connection: LiveConn
 		// 记录接收时间以补偿鉴权和保存期间的进度
 		const receivedAt = performance.now()
 		// 只有管理员可以开启同步，歌曲必须仍在有效漫游列表内
-		if (!(await pool.authorize(connection))) throw new AppError(401, '请先扫码登录电台')
+		if (!(await pool.authorize(connection))) throw new AppError(401, { key: 'auth.loginRequired' })
 		if (pool.closing) return
 		const requested = command.playback
 		const song = requested === null ? null : (getRoamingSongs().find(item => item.id === requested.songId) ?? null)
-		if (requested !== null && !song) throw new AppError(404, '当前歌曲已不在漫游列表中')
-		if (song && (!Number.isFinite(song.durationMs) || song.durationMs <= 0)) throw new AppError(422, '当前歌曲时长无效，暂时无法同步')
+		if (requested !== null && !song) throw new AppError(404, { key: 'roaming.currentSongMissing' })
+		if (song && (!Number.isFinite(song.durationMs) || song.durationMs <= 0)) throw new AppError(422, { key: 'playback.currentInvalidDuration' })
 		const positionMs = song ? Math.min(song.durationMs, requested?.positionMs ?? 0) : 0
 
 		// 先保存并广播开关，保存失败时不修改主线播放
@@ -154,7 +154,7 @@ export async function handleMainSyncRequest(pool: LivePool, connection: LiveConn
 		const snapshot = syncMainPlayback(song, positionMs + performance.now() - receivedAt)
 		pool.send(connection, { type: 'playback-response', requestId: command.requestId, code: 200, data: snapshot })
 	} catch (error: unknown) {
-		respondError(pool, connection, 'playback-response', command.requestId, error, '开启主线同步失败，请稍后重试')
+		respondError(pool, connection, 'playback-response', command.requestId, error, { key: 'playback.mainSyncFailed' })
 	}
 }
 

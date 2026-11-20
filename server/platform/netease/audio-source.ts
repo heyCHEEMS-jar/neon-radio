@@ -17,14 +17,14 @@ async function requestWithFallback(songId: string, cookie: string): Promise<Reco
 			const item = Array.isArray(data) ? data.find(value => isRecord(value) && String(value.id) === songId) : undefined
 			if (isRecord(item) && typeof item.url === 'string' && item.url) return item as Record<string, unknown> & { url: string }
 			missingSource = true
-			lastError = new AppError(422, '当前歌曲暂无可播放音源')
+			lastError = new AppError(422, { key: 'audio.noSource' })
 		} catch (error: unknown) {
 			// 登录失效没必要换音质重试
 			if (error instanceof UpstreamError && error.kind === 'expired') throw error
 			lastError = error
 		}
 	}
-	if (missingSource) throw new AppError(422, '当前歌曲暂无可播放音源')
+	if (missingSource) throw new AppError(422, { key: 'audio.noSource' })
 	throw new UpstreamError('unavailable', '网易云取链请求失败', lastError)
 }
 
@@ -42,10 +42,10 @@ export async function fetchSongAudio(
 	const trial = info ? { start: typeof info.start === 'number' ? info.start : 0, end: typeof info.end === 'number' ? info.end : 0 } : null
 	const duration = typeof item.time === 'number' && Number.isFinite(item.time) && item.time > 0 ? item.time : fallbackDurationMs
 	const durationMs = trial && trial.end > trial.start ? Math.min(duration, (trial.end - trial.start) * 1000) : duration
-	if (!Number.isFinite(durationMs) || durationMs <= 0) throw new AppError(422, '当前音源时长无效')
+	if (!Number.isFinite(durationMs) || durationMs <= 0) throw new AppError(422, { key: 'audio.invalidDuration' })
 
 	const url = new URL(item.url)
-	if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new AppError(502, '音源地址异常')
+	if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new AppError(502, { key: 'audio.invalidUrl' })
 	url.protocol = 'https:'
 	const expiresAt = Date.now() + (typeof item.expi === 'number' ? Math.max(0, item.expi * 1000 - 1000) : 0)
 	return { src: url.toString(), durationMs, trial, expiresAt }

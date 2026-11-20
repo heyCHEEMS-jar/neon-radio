@@ -1,4 +1,5 @@
 import { isRecord } from '@neon-radio/protocol'
+import { ApiError, readServerMessage } from '@/lib/api-error'
 import { visualizerConfig as config } from './visualizer/config'
 
 export interface AudioSource {
@@ -45,8 +46,9 @@ export function createAnalyser(audio: HTMLAudioElement) {
 export async function fetchAudioSource(songId: string, signal: AbortSignal): Promise<AudioSource> {
 	const response = await fetch(`/neon-radio/radio-audio/${encodeURIComponent(songId)}`, { cache: 'no-store', signal })
 	const result: unknown = await response.json()
-	const message = isRecord(result) && typeof result.message === 'string' ? result.message : '音源请求失败'
-	if (!response.ok || !isRecord(result) || result.code !== 200 || !isRecord(result.data) || typeof result.data.src !== 'string') throw new Error(message)
+	if (!response.ok || !isRecord(result) || result.code !== 200 || !isRecord(result.data) || typeof result.data.src !== 'string') {
+		throw new ApiError(readServerMessage(isRecord(result) ? result.message : null) ?? { key: 'audio.requestFailed' })
+	}
 	const trialData = isRecord(result.data.trial) ? result.data.trial : null
 	const trial = trialData && typeof trialData.start === 'number' && typeof trialData.end === 'number' ? { start: trialData.start, end: trialData.end } : null
 	return { src: result.data.src, trial }

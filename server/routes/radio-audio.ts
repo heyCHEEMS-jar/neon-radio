@@ -8,7 +8,7 @@ export default async function radioAudioRoutes(fastify: FastifyInstance) {
 	fastify.get<{ Params: { songId: string } }>('/radio-audio/:songId', async request => {
 		const songId = request.params.songId // 浏览器只提供歌曲 ID，不提供任意音源地址
 		const song = getRoamingSongs().find(item => item.id === songId) ?? getMainPlayback().song
-		if (!song || song.id !== songId) throw new AppError(404, '歌曲已不在电台列表中')
+		if (!song || song.id !== songId) throw new AppError(404, { key: 'song.notInRadio' })
 		return { code: 200, data: await getRadioAudio(song) }
 	})
 }

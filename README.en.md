@@ -8,18 +8,21 @@
   <h1>Neon Radio</h1>
   <p>A personal web radio for one fixed NetEase Cloud Music account: shared playback, guest roaming, playlist sync, and audio-driven visuals.</p>
   <p>
-    <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
-    <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
-    <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-    <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
-    <img src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
-    <img src="https://img.shields.io/badge/WebSocket-live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
-    <img src="https://img.shields.io/badge/MySQL-database-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
-    <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
-    <img src="https://img.shields.io/badge/pnpm-workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
-    <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
-    <img src="https://img.shields.io/badge/License-ISC-blue?style=flat-square" alt="License ISC" />
+    <img src="https://img.shields.io/badge/-React%2019-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
+    <img src="https://img.shields.io/badge/-Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+    <img src="https://img.shields.io/badge/-TypeScript%206-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6" />
+    <img src="https://img.shields.io/badge/-Tailwind%20CSS%204-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+    <img src="https://img.shields.io/badge/-Fastify%205-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
+    <img src="https://img.shields.io/badge/-WebSocket%20live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
+    <img src="https://img.shields.io/badge/-MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+    <img src="https://img.shields.io/badge/-Drizzle%20ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
+    <img src="https://img.shields.io/badge/-pnpm%20workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
+    <img src="https://img.shields.io/badge/-Node.js%2020+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
   </p>
+</div>
+
+<div align="center">
+  <img src="./docs/images/showcase.gif" alt="Neon Radio demo: shared playback and audio-driven visuals" width="100%" />
 </div>
 
 ## Getting started
@@ -31,18 +34,14 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill in `NETEASE_UID` (the number after `id=` in your profile URL), `NETEASE_COOKIE_ENCRYPTION_KEY` (Base64 of 32 random bytes), and the `DB_*` variables, then run:
+Fill in `NETEASE_UID`, `NETEASE_COOKIE_ENCRYPTION_KEY`, and the `DB_*` variables in `.env`. Then run:
 
 ```bash
-pnpm dev
+pnpm start
 ```
 
 - Frontend: <http://localhost:3003>
 - API: <http://localhost:4003/neon-radio>
-
-Right-click (or long-press on mobile) and scan the QR code. After login the server syncs playlists in the background and fills in lyrics, chorus ranges, and audio timelines.
-
-Other scripts: `pnpm typecheck`, `pnpm build`, `pnpm start` (production, PM2), `pnpm clean`.
 
 ## Features
 
@@ -70,8 +69,6 @@ Fastify (4003)
   └─ MySQL
 ```
 
-The server creates the database, runs migrations, and restores the saved session on startup. Onset timelines are analysed offline on the server; the browser only triggers impacts from those stored timelines and never fakes beats from a live spectrum.
-
 ## Stack
 
 | Layer | Main dependencies |
@@ -86,8 +83,6 @@ The server creates the database, runs migrations, and restores the saved session
 | Contracts | `@neon-radio/protocol` (workspace), zod |
 | Tooling | pnpm, tsx, concurrently, PM2, PostCSS |
 
-The vendored ncm-api also pulls in axios, crypto-js, node-forge, jsdom, qrcode, xml2js, and others; business code does not use them directly.
-
 ## Project structure
 
 ```text
@@ -100,8 +95,6 @@ neon-radio/
 ├─ server/platform/             DB, HTTP, crypto, NetEase adapters
 └─ server/vendor/ncm-api/       third-party, read-only
 ```
-
-Entry layers (`routes` / `live`) only validate and forward; business modules never write SQL; the platform layer owns the database and third-party adapters. Dependencies point downward only, and the audio layer is used only through its `index.ts`.
 
 ## Third-party assets
 

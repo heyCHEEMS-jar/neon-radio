@@ -5,6 +5,7 @@ import { RadioAudioContext, useVisualizer } from '@/audio'
 import { visualizerConfig as config } from '@/audio/visualizer/config'
 import { getPlaybackPosition, RadioLiveContext } from '@/features/radio/live/useRadioLive'
 import { useMediaQuery } from '@/lib/use-media-query'
+import { useI18n } from '@/i18n/context'
 import { RadioSceneContext, SceneRefContext } from '@/features/radio/scene'
 import ChorusBackdrop from './ChorusBackdrop'
 import SongTitle from './SongTitle'
@@ -24,6 +25,7 @@ function formatTime(milliseconds: number) {
 }
 
 export default function Visuals() {
+	const { t } = useI18n()
 	const active = useContext(RadioSceneContext)
 	const sceneRef = useContext(SceneRefContext)
 	const isMobile = useMediaQuery('(max-width: 767px)')
@@ -51,7 +53,7 @@ export default function Visuals() {
 	}, [active, playback?.playbackId, playback?.positionMs, playback?.receivedAt, song])
 
 	return (
-		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label="音频可视化">
+		<section className="pointer-events-none fixed inset-0 z-1 h-svh w-full overflow-hidden" aria-label={t('visuals.label')}>
 			<ChorusBackdrop />
 			<canvas ref={topRef} className={`top-0 ${edgeClassName}`} aria-hidden="true" />
 			<SongTitle song={song} />
@@ -67,8 +69,8 @@ export default function Visuals() {
 				>
 					{!isMobile && (
 						<div className={`${infoClassName} w-full max-w-[clamp(180px,30vw,560px)] justify-self-end -mr-[clamp(8px,5vw,100px)]`}>
-							<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? '等待电台'}>
-								{song?.name ?? '等待电台'}
+							<p className="m-0 truncate uppercase tracking-[0.06em]" title={song?.name ?? t('visuals.waiting')}>
+								{song?.name ?? t('visuals.waiting')}
 							</p>
 						</div>
 					)}
@@ -102,7 +104,7 @@ export default function Visuals() {
 
 					{!isMobile && (
 						<div className={`${infoClassName} w-full max-w-[clamp(180px,30vw,560px)] justify-self-start -ml-[clamp(8px,5vw,100px)]`}>
-							<p className="m-0 whitespace-nowrap tabular-nums" aria-label={`播放进度 ${progress}`}>
+							<p className="m-0 whitespace-nowrap tabular-nums" aria-label={t('visuals.progress', { progress })}>
 								{progress}
 							</p>
 						</div>

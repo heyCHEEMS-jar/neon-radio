@@ -8,18 +8,21 @@
   <h1>Neon Radio</h1>
   <p>面向固定网易云账号的个人网页电台：主线播放、游客漫游、歌单同步与音频冲击可视化。</p>
   <p>
-    <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
-    <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
-    <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-    <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
-    <img src="https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
-    <img src="https://img.shields.io/badge/WebSocket-live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
-    <img src="https://img.shields.io/badge/MySQL-database-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
-    <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
-    <img src="https://img.shields.io/badge/pnpm-workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
-    <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
-    <img src="https://img.shields.io/badge/License-ISC-blue?style=flat-square" alt="License ISC" />
+    <img src="https://img.shields.io/badge/-React%2019-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19" />
+    <img src="https://img.shields.io/badge/-Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16" />
+    <img src="https://img.shields.io/badge/-TypeScript%206-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6" />
+    <img src="https://img.shields.io/badge/-Tailwind%20CSS%204-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+    <img src="https://img.shields.io/badge/-Fastify%205-000000?style=flat-square&logo=fastify&logoColor=white" alt="Fastify 5" />
+    <img src="https://img.shields.io/badge/-WebSocket%20live-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSocket" />
+    <img src="https://img.shields.io/badge/-MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+    <img src="https://img.shields.io/badge/-Drizzle%20ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black" alt="Drizzle ORM" />
+    <img src="https://img.shields.io/badge/-pnpm%20workspace-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm" />
+    <img src="https://img.shields.io/badge/-Node.js%2020+-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 20+" />
   </p>
+</div>
+
+<div align="center">
+  <img src="./docs/images/showcase.gif" alt="Neon Radio 演示：主线播放与音频冲击可视化" width="100%" />
 </div>
 
 ## 快速开始
@@ -31,22 +34,14 @@ pnpm install
 cp .env.example .env
 ```
 
-在 `.env` 中至少填写 `NETEASE_UID`（个人主页 `id=` 后的数字）、`NETEASE_COOKIE_ENCRYPTION_KEY` 和 `DB_*`。生成密钥：
+在 `.env` 中至少填写 `NETEASE_UID`、`NETEASE_COOKIE_ENCRYPTION_KEY` 和 `DB_*`。然后运行：
 
 ```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
-```
-
-```bash
-pnpm dev
+pnpm start
 ```
 
 - 前端：<http://localhost:3003>
 - 服务端：<http://localhost:4003/neon-radio>
-
-在页面右键（手机长按）选择「登录电台」扫码。登录后后台会自动同步歌单，并补齐歌词、副歌区间和音频时间轴。
-
-其他脚本：`pnpm typecheck`、`pnpm build`、`pnpm start`（生产，PM2）、`pnpm clean`。
 
 ## 功能
 
@@ -74,8 +69,6 @@ Fastify（4003）
   └─ MySQL
 ```
 
-服务端启动时自动建库、执行迁移并恢复已保存的登录态。音频的起音时间轴由服务端离线分析后入库，前端只按真实时间轴触发冲击，不使用实时频谱伪造节奏。
-
 ## 技术栈
 
 | 层级 | 主要依赖 |
@@ -90,8 +83,6 @@ Fastify（4003）
 | 协议与校验 | `@neon-radio/protocol`（workspace）、zod |
 | 工具链 | pnpm、tsx、concurrently、PM2、PostCSS |
 
-内置 ncm-api 还会间接依赖 axios、crypto-js、node-forge、jsdom、qrcode、xml2js 等库，业务代码不直接使用。
-
 ## 项目结构
 
 ```text
@@ -104,8 +95,6 @@ neon-radio/
 ├─ server/platform/            DB、HTTP、加密、网易云适配
 └─ server/vendor/ncm-api/      第三方，只读
 ```
-
-入口层（`routes` / `live`）只做校验和转发，业务层不写 SQL，工具层承担数据库与第三方适配，依赖只能向下。音频层对外只暴露各自的 `index.ts`。
 
 ## 第三方资源
 

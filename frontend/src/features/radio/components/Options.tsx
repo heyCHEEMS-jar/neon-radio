@@ -7,17 +7,20 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import useRadioOptions from '@/features/radio/settings/useRadioOptions'
 import { isPlaybackOrder } from '@neon-radio/protocol'
+import { useI18n } from '@/i18n/context'
+import type { StringKey } from '@/i18n/locales'
 import { debounce } from '@/lib/debounce'
 
-const optionMessages = {
-	loading: '正在读取电台配置…',
-	ready: '配置已与服务端同步。',
-	saving: '正在保存电台配置…',
-	error: '配置读取失败，请重试。'
+const optionMessages: Record<'loading' | 'ready' | 'saving' | 'error', StringKey> = {
+	loading: 'options.loading',
+	ready: 'options.ready',
+	saving: 'options.saving',
+	error: 'options.loadError'
 }
 
 // 展示管理员电台选项，开启主线同步前单独确认
 export default function Options({ onClose }: { onClose: () => void }) {
+	const { t, serverMessage } = useI18n()
 	const { options, status, load, update, neteaseSync, syncPending, successfulSyncId, sync } = useRadioOptions(true)
 	const [confirmingMainSync, setConfirmingMainSync] = useState(false)
 	// 每次打开记录已有成功任务，新成功只隐藏本次弹窗的入口
@@ -25,7 +28,7 @@ export default function Options({ onClose }: { onClose: () => void }) {
 	const syncSucceeded = successfulSyncId !== null && successfulSyncId !== initialSuccessfulSyncId
 	const syncing = syncPending || neteaseSync?.phase === 'refreshing' || neteaseSync?.phase === 'syncing'
 	const busy = status === 'saving' || syncPending
-	const syncMessage = syncPending ? '正在发送同步请求…' : neteaseSync?.message
+	const syncMessage = syncPending ? t('options.syncSending') : neteaseSync && serverMessage(neteaseSync.message)
 
 	// 网易云数据刷新沿用原有点击合并，与主线播放操作无关
 	const debouncedSync = useMemo(() => debounce(sync, 300), [sync])
@@ -52,15 +55,15 @@ export default function Options({ onClose }: { onClose: () => void }) {
 			>
 				<DialogContent aria-busy={status === 'loading' || busy} showCloseButton={!busy}>
 					<DialogHeader>
-						<DialogTitle>电台选项</DialogTitle>
-						<DialogDescription>{syncing ? syncMessage : optionMessages[status]}</DialogDescription>
+						<DialogTitle>{t('options.title')}</DialogTitle>
+						<DialogDescription>{syncing ? syncMessage : t(optionMessages[status])}</DialogDescription>
 					</DialogHeader>
 					{options && (
 						<div className="space-y-5">
 							<div className="flex items-start justify-between gap-4">
 								<div className="space-y-1">
-									<p id="playback-order-label" className="text-sm font-medium">播放顺序</p>
-									<p className="text-sm text-zinc-500">切歌时生效，主线和本地漫游分别播放。</p>
+									<p id="playback-order-label" className="text-sm font-medium">{t('options.orderLabel')}</p>
+									<p className="text-sm text-zinc-500">{t('options.orderHint')}</p>
 								</div>
 								<select
 									value={options.playbackOrder ?? 'random'}
@@ -72,18 +75,18 @@ export default function Options({ onClose }: { onClose: () => void }) {
 										if (isPlaybackOrder(order)) void update('playbackOrder', order)
 									}}
 								>
-									<option value="random">随机播放</option>
-									<option value="sequential">顺序播放</option>
-									<option value="single">单曲循环</option>
+									<option value="random">{t('playback.random')}</option>
+									<option value="sequential">{t('playback.sequential')}</option>
+									<option value="single">{t('playback.single')}</option>
 								</select>
 							</div>
 							<div className="flex items-start justify-between gap-4">
 								<div className="space-y-1">
 									<p id="guest-roaming-label" className="text-sm font-medium">
-										游客自漫游
+										{t('options.guestRoaming')}
 									</p>
 									<p id="guest-roaming-description" className="text-sm text-zinc-500">
-										自行选歌、调整进度，不影响主线电台。
+										{t('options.guestRoamingHint')}
 									</p>
 								</div>
 								<Switch
@@ -99,10 +102,10 @@ export default function Options({ onClose }: { onClose: () => void }) {
 							<div className="flex items-start justify-between gap-4">
 								<div className="space-y-1">
 									<p id="force-main-sync-label" className="text-sm font-medium">
-										强制同步到主电台
+										{t('options.forceSync')}
 									</p>
 									<p id="force-main-sync-description" className="text-sm text-zinc-500">
-										开启时推送当前歌曲和进度，管理员选歌会影响主线听众，游客漫游不受影响。
+										{t('options.forceSyncHint')}
 									</p>
 								</div>
 								<Switch
@@ -124,7 +127,7 @@ export default function Options({ onClose }: { onClose: () => void }) {
 							disabled={busy}
 							className="cursor-pointer rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-50"
 						>
-							重新加载
+							{t('common.retry')}
 						</button>
 					)}
 					{!syncSucceeded && (
@@ -135,8 +138,8 @@ export default function Options({ onClose }: { onClose: () => void }) {
 								disabled={status !== 'ready' || busy || syncing}
 								className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
 							>
-								{syncing ? <Spinner aria-label="正在同步网易云数据" /> : <RefreshCw className="size-4" />}
-								{syncing ? '正在同步…' : '重新同步网易云数据'}
+								{syncing ? <Spinner aria-label={t('options.syncPending')} /> : <RefreshCw className="size-4" />}
+								{syncing ? t('options.syncing') : t('options.resync')}
 							</button>
 						</div>
 					)}
@@ -144,17 +147,15 @@ export default function Options({ onClose }: { onClose: () => void }) {
 			</Dialog>
 			<Dialog open={confirmingMainSync} onOpenChange={setConfirmingMainSync}>
 				<DialogContent role="alertdialog" showCloseButton={false}>
-					<DialogTitle>开启主线同步</DialogTitle>
-					<DialogDescription>
-						开启后，本页面当前歌曲和播放进度会立即推送到主电台，主线听众将同步切换；之后所有已登录管理员页面的选歌操作都会影响主电台，游客漫游仍独立播放。确定开启吗？
-					</DialogDescription>
+					<DialogTitle>{t('options.confirmSyncTitle')}</DialogTitle>
+					<DialogDescription>{t('options.confirmSyncDescription')}</DialogDescription>
 					<div className="flex justify-end gap-2">
 						<button
 							type="button"
 							onClick={() => setConfirmingMainSync(false)}
 							className="cursor-pointer rounded-md border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100"
 						>
-							取消
+							{t('common.cancel')}
 						</button>
 						<button
 							type="button"
@@ -162,7 +163,7 @@ export default function Options({ onClose }: { onClose: () => void }) {
 							disabled={status !== 'ready' || busy}
 							className="cursor-pointer rounded-md bg-zinc-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
 						>
-							确认开启
+							{t('options.confirmEnable')}
 						</button>
 					</div>
 				</DialogContent>

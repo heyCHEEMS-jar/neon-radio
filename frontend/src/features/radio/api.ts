@@ -1,4 +1,5 @@
 import type { RadioOptions } from '@neon-radio/protocol'
+import { ApiError } from '@/lib/api-error'
 import { request } from '@/lib/request'
 
 interface LoginStatus {
@@ -13,7 +14,7 @@ export interface LoginQr {
 // 查询当前浏览器是否已经登录管理员会话
 export async function fetchLoginStatus(signal?: AbortSignal) {
 	const { data } = await request<LoginStatus>('/neon-radio/login', { signal })
-	if (!data || typeof data.loggedIn !== 'boolean') throw new Error('登录状态检查失败，请重试')
+	if (!data || typeof data.loggedIn !== 'boolean') throw new ApiError({ key: 'auth.checkFailed' })
 	return data.loggedIn
 }
 
@@ -33,7 +34,7 @@ export async function saveRadioOption(update: { key: keyof RadioOptions; value: 
 
 export async function createLoginQr(signal?: AbortSignal) {
 	const { code, data } = await request<LoginQr>('/neon-radio/login-qr', { method: 'POST', signal })
-	if (code !== 200 || !data || typeof data.key !== 'string' || typeof data.image !== 'string') throw new Error('二维码数据异常')
+	if (code !== 200 || !data || typeof data.key !== 'string' || typeof data.image !== 'string') throw new ApiError({ key: 'qr.invalidResponse' })
 	return data
 }
 

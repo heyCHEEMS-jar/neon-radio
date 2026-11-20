@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion, useSpring, useTransform } from 'framer-motion'
 import { useState, type CSSProperties, type ImgHTMLAttributes, type PointerEvent, type ReactNode } from 'react'
+import { useI18n } from '@/i18n/context'
 import styles from '@/styles/tilted-card.module.css'
 
 interface TiltedCardProps {
@@ -46,6 +47,7 @@ export default function TiltedCard({
 	className,
 	style
 }: TiltedCardProps) {
+	const { t } = useI18n()
 	const reducedMotion = useReducedMotion()
 	// 按封面来源记录加载结果，网格复用卡片时不沿用旧图片的加载状态
 	const [loadedImage, setLoadedImage] = useState<{ src: string; srcSet?: string } | null>(null)
@@ -87,7 +89,7 @@ export default function TiltedCard({
 			style={style}
 			role={onClick ? 'button' : undefined}
 			tabIndex={onClick ? 0 : undefined}
-			aria-label={onClick ? altText || '播放歌曲' : undefined}
+			aria-label={onClick ? altText || t('cover.play') : undefined}
 			onClick={onClick}
 			onKeyDown={event => {
 				if (!onClick || event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
@@ -106,7 +108,7 @@ export default function TiltedCard({
 				style={{ rotateX, rotateY, scale, borderRadius: radius, backgroundColor }}
 			>
 				{!imageLoaded && children}
-				{playing && <span className={styles.playing}>播放中</span>}
+				{playing && <span className={styles.playing}>{t('cover.playing')}</span>}
 				{imageSrc && (
 					<img
 						className={styles.image}

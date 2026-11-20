@@ -7,6 +7,7 @@ import Fastify from 'fastify'
 import { closeAudioAnalysis, queueMissingSongs, setSourceResolver } from './audio/index.js'
 import config, { validateConfig } from './config.js'
 import browserAuth, { clearExpiredBrowserToken } from './guards/auth.js'
+import { RateLimitError } from './platform/errors.js'
 import neteaseQrCompat from './guards/netease-qr-compat.js'
 import sameOriginGuard from './guards/same-origin.js'
 import initLive from './live/index.js'
@@ -56,10 +57,14 @@ try {
 	await fastify.register(fastifyCookie)
 	await fastify.register(fastifyRateLimit, {
 		global: false,
-		errorResponseBuilder: (_request, context) => ({ code: 429, message: `请求过于频繁，请 ${Math.ceil(context.ttl / 1000)} 秒后重试` })
+		errorResponseBuilder: (_request, context) =>
+			new RateLimitError({ key: 'request.rateLimited', params: { seconds: Math.ceil(context.ttl / 1000) } })
 	})
 	fastify.setNotFoundHandler(async (_request, reply) => {
-		return reply.header('Cache-Control', 'no-store').code(404).send({ code: 404, message: '404 未知访问路径' })
+		return reply
+			.header('Cache-Control', 'no-store')
+			.code(404)
+			.send({ code: 404, message: { key: 'route.notFound' } })
 	})
 	// 同源校验、登录会话和原生扫码兼容都在业务路由之前执行
 	fastify.addHook('onRequest', sameOriginGuard)
@@ -102,12 +107,13 @@ try {
 ██║╚██╗██║██╔══╝  ██║   ██║██║╚██╗██║    ██╔══██╗██╔══██║██║  ██║██║██║   ██║
 ██║ ╚████║███████╗╚██████╔╝██║ ╚████║    ██║  ██║██║  ██║██████╔╝██║╚██████╔╝
 ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝
-──────────────────────────────────
+────────────────────────────────────
 ★ 	Status: Online 		★
-★ 	Port: ${config.API_PORT} 		★
+★ 	Web Port: ${config.WEB_PORT} 		★
+★ 	API Port: ${config.API_PORT} 		★
 ★ 	Env: ${process.env.NODE_ENV || 'development'} 	★
 ★ 	System: ${process.platform} 		★
-──────────────────────────────────
+────────────────────────────────────
 `)
 		console.log(`[Neon Radio] ${address}/neon-radio`)
 		console.log(`[NCM API] ${address}/neon-radio/ncm`)

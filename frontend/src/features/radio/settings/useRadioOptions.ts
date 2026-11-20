@@ -3,6 +3,8 @@
 import type { RadioOptions } from '@neon-radio/protocol'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { serverMessage, t } from '@/i18n'
+import { ApiError } from '@/lib/api-error'
 import { saveRadioOption } from '../api'
 import { RadioLiveContext } from '../live/useRadioLive'
 
@@ -11,7 +13,7 @@ type OptionsStatus = 'loading' | 'ready' | 'saving' | 'error'
 // 管理配置保存状态，配置和同步结果由页面实时连接维护
 export default function useRadioOptions(open: boolean) {
 	const live = useContext(RadioLiveContext)
-	if (!live) throw new Error('电台选项需要放在电台实时管线内')
+	if (!live) throw new Error(t('options.outsideLive'))
 	const [saving, setSaving] = useState(false)
 	const status: OptionsStatus = saving ? 'saving' : live.status
 	const requestRef = useRef<AbortController | null>(null)
@@ -44,7 +46,7 @@ export default function useRadioOptions(open: boolean) {
 			}
 		} catch (error: unknown) {
 			if (!controller.signal.aborted) {
-				toast.error('保存电台选项失败', { description: error instanceof Error ? error.message : '请稍后重试' })
+				toast.error(t('options.saveFailed'), { description: error instanceof ApiError ? serverMessage(error.serverMessage) : t('options.tryLater') })
 			}
 		} finally {
 			if (requestRef.current === controller) {

@@ -1,4 +1,5 @@
 const config = {
+	WEB_PORT: Number(process.env.WEB_PORT || '3003'),
 	API_PORT: Number(process.env.API_PORT || '4003'),
 	NETEASE_UID: process.env.NETEASE_UID?.trim() || '',
 	COOKIE_REFRESH_HOURS: Number(process.env.COOKIE_REFRESH_HOURS || '6'),

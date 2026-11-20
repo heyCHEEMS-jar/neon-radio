@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import type { NeteaseSyncState } from '@neon-radio/protocol'
+import type { NeteaseSyncState, ServerMessage } from '@neon-radio/protocol'
 import { AppError, UpstreamError } from '../platform/errors.js'
 
 export const neteaseSyncEvents = new EventEmitter<{ change: [NeteaseSyncState] }>()
@@ -17,11 +17,11 @@ export function publishNeteaseSync(state: NeteaseSyncState) {
 }
 
 // 只下发可公开的错误说明，不透传网易云响应或数据库错误
-export function readNeteaseSyncError(error: unknown) {
-	if (error instanceof AppError) return error.message
+export function readNeteaseSyncError(error: unknown): ServerMessage {
+	if (error instanceof AppError) return error.serverMessage
 	if (error instanceof UpstreamError) {
-		if (error.kind === 'expired') return '网易云登录已失效，请重新登录'
-		if (error.kind === 'forbidden') return '网易云拒绝访问，请重新登录或稍后重试'
+		if (error.kind === 'expired') return { key: 'upstream.expiredSync' }
+		if (error.kind === 'forbidden') return { key: 'upstream.forbiddenSync' }
 	}
-	return '请求网易云失败，请稍后重试'
+	return { key: 'upstream.failedSync' }
 }

@@ -1,3 +1,4 @@
+import type { ServerMessage } from '@neon-radio/protocol'
 import { AppError } from '../platform/errors.js'
 import type { LiveConnection, LivePool } from './connection.js'
 
@@ -8,12 +9,12 @@ export function respondError(
 	type: 'playback-response' | 'netease-sync-response',
 	requestId: string,
 	error: unknown,
-	fallback: string
+	fallback: ServerMessage
 ) {
 	pool.send(connection, {
 		type,
 		requestId,
 		code: error instanceof AppError ? error.status : 503,
-		message: error instanceof Error ? error.message : fallback
+		message: error instanceof AppError ? error.serverMessage : fallback
 	})
 }
