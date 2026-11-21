@@ -74,9 +74,10 @@ export function handlePauseRequest(pool: LivePool, connection: LiveConnection, c
 export async function handleNextRequest(pool: LivePool, connection: LiveConnection, command: NextRequest) {
 	if (pool.closing) return
 	try {
-		// 只有当前本地实例可以申请续播
-		const current = connection.local
-		if (!current?.song || current.playbackId !== command.playbackId) throw new AppError(409, { key: 'playback.instanceChanged' })
+		// 主线态以服务端最新快照为起点，首次点击即进入游客漫游；已漫游时只认当前实例
+		const local = connection.local
+		const current = local ?? getMainPlayback()
+		if (!current.song || (local && current.playbackId !== command.playbackId)) throw new AppError(409, { key: 'playback.instanceChanged' })
 		const authorized = await pool.authorize(connection)
 		let snapshot: PlaybackSnapshot | null = null
 		if (authorized || getRadioOptions().guestRoamingEnabled) {
