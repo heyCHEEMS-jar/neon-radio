@@ -16,7 +16,7 @@ export default function LocaleToggle({ className }: { className?: string }) {
 			className={`flex cursor-pointer items-center gap-1.5 p-1 text-xs font-medium tabular-nums text-white/70 [text-shadow:0_1px_6px_rgba(0,0,0,0.8)] transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-white ${className ?? ''}`}
 		>
 			<Languages className="size-3.5" aria-hidden="true" />
-			{locale === 'zh' ? '中' : 'EN'}
+			{locale === 'zh' ? 'EN' : '中'}
 		</button>
 	)
 }
